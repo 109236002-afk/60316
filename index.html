@@ -1,0 +1,1445 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>我的世界v1.0(Alpha)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* 基礎樣式 */
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: #2c3e50;
+            font-family: 'Inter', sans-serif;
+            color: #ecf0f1;
+        }
+
+        canvas {
+            display: block;
+        }
+
+        /* --- 遊戲 HUD 元素 --- */
+        
+        /* 保持 health-bar 的動畫效果 */
+        #health-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            height: 100%;
+            background-color: #e74c3c;
+            transition: width 0.3s ease;
+        }
+        
+        /* HUD 元素的樣式調整為使用 Tailwind，但保留一些核心 CSS */
+        #health-text {
+            position: relative;
+            z-index: 1;
+            font-size: 0.9rem;
+            font-weight: bold;
+            color: white;
+        }
+        
+        #time-display {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 1.2rem;
+            z-index: 100;
+        }
+
+        #durability-display {
+            position: absolute;
+            top: 60px;
+            right: 20px;
+            background-color: rgba(0, 0, 0, 0.6);
+            color: white;
+            padding: 8px;
+            border-radius: 5px;
+            font-size: 0.9rem;
+            z-index: 100;
+            display: none; /* 預設隱藏 */
+            min-width: 150px;
+            text-align: center;
+        }
+
+        #crosshair {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background-color: white;
+            border: 1px solid black;
+            pointer-events: none;
+            z-index: 100;
+        }
+        
+        #message-box {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            min-height: 20px;
+            text-align: center;
+            z-index: 100;
+        }
+
+        /* --- 庫存 UI 樣式 --- */
+        #inventory-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.7);
+            display: none; /* 預設隱藏 */
+            align-items: center;
+            justify-content: center;
+            z-index: 200;
+        }
+
+        #inventory-content {
+            background-color: #5c6e7a; /* 淺藍灰色背景 */
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+            border: 3px solid #34495e;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .inventory-grid-container {
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 4px; /* 緊湊的格子間距 */
+        }
+        
+        .inventory-slot {
+            width: 45px;
+            height: 45px;
+            background-color: #8395a7; 
+            border: 2px solid #5c6e7a; 
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+            cursor: pointer;
+            transition: all 0.05s ease-out;
+            user-select: none;
+        }
+        .inventory-slot:hover {
+            background-color: #98a9b9;
+        }
+        .inventory-slot.selected-hotbar {
+            border: 3px solid #f39c12; /* 快捷欄選中邊框 */
+        }
+
+        .item-icon {
+            font-size: 24px;
+            line-height: 1;
+            user-select: none;
+            pointer-events: none;
+        }
+
+        .stack-count {
+            position: absolute;
+            bottom: 0;
+            right: 2px;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            text-shadow: 1px 1px 0 #000, -1px -1px 0 #000;
+            user-select: none;
+            pointer-events: none;
+        }
+        
+        .dragging {
+            opacity: 0.5;
+            transform: scale(1.05);
+        }
+
+        /* 快捷欄在遊戲中的顯示 */
+        #hotbar-hud {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: grid;
+            grid-template-columns: repeat(9, 1fr);
+            gap: 4px;
+            z-index: 10;
+        }
+
+        #hotbar-hud .inventory-slot {
+            width: 50px;
+            height: 50px;
+            background-color: rgba(0, 0, 0, 0.4);
+            border: 2px solid #3c3c3c;
+        }
+
+        #hotbar-hud .inventory-slot.selected-hotbar {
+            border: 3px solid #f39c12;
+            background-color: rgba(0, 0, 0, 0.6);
+        }
+        
+        #item-info-panel {
+            min-height: 50px;
+            background-color: #34495e;
+            padding: 10px;
+            border-radius: 6px;
+            border: 1px solid #2c3e50;
+            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+        }
+
+        /* 製作按鈕 */
+        .craft-button {
+            padding: 8px 15px;
+            border-radius: 6px;
+            background-color: #2ecc71;
+            color: white;
+            font-weight: bold;
+            transition: background-color 0.2s;
+        }
+
+        .craft-button:hover {
+            background-color: #27ae60;
+        }
+
+        .craft-button:disabled {
+            background-color: #7f8c8d;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body>
+    <!-- 遊戲 HUD 元素 -->
+    <div id="crosshair"></div>
+    
+    <!-- 生命值容器 (使用 Tailwind 定位) -->
+    <div class="absolute top-5 left-5 z-[100] flex items-center gap-3">
+        <div id="health-container" class="w-[200px] h-[30px] border-2 border-white rounded-md overflow-hidden flex items-center justify-center bg-black/50">
+            <div id="health-bar"></div>
+            <span id="health-text">50 / 100</span>
+        </div>
+    </div>
+    
+    <div id="time-display">時間: 06:00</div>
+    <div id="durability-display">耐久度: 60 / 60</div>
+    <div id="message-box">點擊畫面以開始遊戲，按 C 鍵打開背包。遊戲時間為 1:60 加速。</div>
+
+    <!-- 遊戲中快捷欄顯示 -->
+    <div id="hotbar-hud" class="hotbar-grid-container">
+        <!-- 9 個格子由 JS 渲染 -->
+    </div>
+
+    <!-- 庫存/合成模態視窗 -->
+    <div id="inventory-modal">
+        <div id="inventory-content" class="w-full max-w-xl">
+            <!-- 物品資訊面板 -->
+            <div id="item-info-panel">
+                <p id="item-name" class="text-lg font-bold text-yellow-300">請點擊一個格子...</p>
+                <p id="item-details" class="text-sm text-gray-300"></p>
+            </div>
+            
+            <!-- 主庫存 (3x9 = 27) -->
+            <div class="flex flex-col gap-2">
+                <h3 class="text-sm font-semibold text-gray-200">主庫存 (Main Inventory)</h3>
+                <div id="main-inventory-grid" class="inventory-grid-container"></div>
+            </div>
+
+            <!-- 快捷欄 (1x9 = 9) -->
+            <div class="flex flex-col gap-2">
+                <h3 class="text-sm font-semibold text-gray-200">快捷欄 (Hotbar)</h3>
+                <div id="inventory-hotbar-grid" class="inventory-grid-container"></div>
+            </div>
+            
+            <!-- 簡易合成區 -->
+            <div class="flex flex-col gap-3 p-3 bg-gray-700/50 rounded-lg">
+                <h3 class="text-lg font-bold text-emerald-300">簡易合成 (Crafting)</h3>
+                <div class="flex flex-wrap gap-3 justify-center">
+                    <button class="craft-button" onclick="craftItem(6, {3: 4})" data-name="石磚">4 石頭 → 1 石磚</button>
+                    <button class="craft-button" onclick="craftItem(7, {4: 1})" data-name="木板">1 木頭 → 4 木板</button>
+                    <button class="craft-button" onclick="craftItem(8, {7: 2})" data-name="木棍">2 木板 → 4 木棍</button>
+                    <button class="craft-button" onclick="craftItem(9, {8: 2, 7: 3})" data-name="木鎬">2 木棍 + 3 木板 → 1 木鎬</button>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
+
+    <script>
+        (function() {
+            // --- 全域變數和遊戲狀態 ---
+            const messageBox = document.getElementById('message-box');
+            const healthBar = document.getElementById('health-bar');
+            const healthText = document.getElementById('health-text');
+            const durabilityDisplay = document.getElementById('durability-display');
+            const timeDisplay = document.getElementById('time-display');
+            
+            const inventoryModal = document.getElementById('inventory-modal');
+            const mainInventoryGrid = document.getElementById('main-inventory-grid');
+            const inventoryHotbarGrid = document.getElementById('inventory-hotbar-grid');
+            const hotbarHUD = document.getElementById('hotbar-hud');
+            const itemNameDisplay = document.getElementById('item-name');
+            const itemDetailsDisplay = document.getElementById('item-details');
+            
+            let scene, camera, renderer, world;
+            let ambientLight, directionalLight;
+            let player, playerBody;
+            let lastTime; 
+            let lastCullTime = 0;
+            const cullingDistance = 50;
+            let isGameOver = false;
+            let isInventoryOpen = false; // 狀態：庫存是否開啟
+            let draggedSlot = null; // 拖曳狀態追蹤
+            
+            // 玩家狀態
+            let playerHealth = 50; // <--- 設置初始生命值為 50
+            const maxHealth = 100;
+            const playerDamage = 10; 
+            let canJump = false; 
+            let fallStartY = null;
+            let isFalling = false;
+            const minFallHeight = 10; 
+            const fallDamageFactor = 2; 
+
+            // 挖掘狀態
+            let isDigging = false;
+            let diggingStartTime = 0;
+            let diggingBlockId = null;
+            let diggingEffect = null;
+            const blockMeshes = new Map();
+            const blockBodies = new Map();
+
+            // 生物追蹤
+            const pigMeshes = [];
+            const pigBodies = [];
+            const saplingGrowthTracker = new Map(); 
+
+            // 鍵盤狀態
+            const keyboard = {};
+            
+            // --- 庫存與物品定義 ---
+            const BLOCK_DIMENSIONS = 1;
+            const WOODEN_PICKAXE_MAX_DURABILITY = 60;
+            let currentPickaxeDurability = WOODEN_PICKAXE_MAX_DURABILITY; 
+            let selectedHotbarIndex = 0; // 快捷欄 0-8
+
+            // 物品定義 (ItemId 必須與遊戲內方塊/物品名稱對應)
+            const itemDefinitions = {
+                1: { name: "草方塊", maxStack: 64, icon: "🌿", blockType: 'grass' },
+                2: { name: "泥土", maxStack: 64, icon: "🟫", blockType: 'dirt' },
+                3: { name: "石頭", maxStack: 64, icon: "🪨", blockType: 'stone' },
+                4: { name: "木頭", maxStack: 64, icon: "🪵", blockType: 'wood' },
+                5: { name: "樹葉", maxStack: 64, icon: "🍃", blockType: 'leaves' },
+                6: { name: "石磚", maxStack: 64, icon: "🧱", blockType: 'stone_bricks' },
+                7: { name: "木板", maxStack: 64, icon: "🚪", blockType: 'wooden_planks' },
+                8: { name: "木棍", maxStack: 64, icon: "🥢", blockType: 'sticks' },
+                9: { name: "木鎬", maxStack: 1, icon: "⛏️", blockType: 'wooden_pickaxe', tool: true },
+                10: { name: "樹苗", maxStack: 64, icon: "🌱", blockType: 'sapling' },
+                11: { name: "豬肉", maxStack: 64, icon: "🥩", blockType: 'pork', edible: true }
+            };
+
+            // 庫存陣列 (0-26 主庫存, 27-35 快捷欄)
+            let inventoryData = new Array(36).fill(null).map((_, index) => ({ slot: index, itemId: null, stack: 0 }));
+
+            // --- 初始物品設定 (只給予草方塊在快捷欄第一個格子, 第二個格子給豬肉) ---
+            inventoryData[27] = { slot: 27, itemId: 1, stack: 64 }; // 草方塊
+            inventoryData[28] = { slot: 28, itemId: 11, stack: 5 }; // 豬肉 (用於測試)
+            // ---------------------------------------------------
+            
+            // 方塊顏色對應 (用於 3D 渲染)
+            const blockColors = {
+                'grass': 0x2ecc71, 'dirt': 0x8b4513, 'stone': 0x95a5a6, 'wood': 0x7d5e4a,
+                'leaves': 0x27ae60, 'stone_bricks': 0x7f8c8d, 'pig': 0xffa07a, 'empty': 0x70a1d6,
+                'wooden_planks': 0x966F33, 'sticks': 0x8A4B2A, 'sapling': 0x559e31, 'pork': 0xFF69B4,
+                'wooden_pickaxe': 0x9e7354
+            };
+
+            // 方塊挖掘時間 (毫秒)
+            const blockDurations = {
+                'grass': 1000, 'dirt': 1000, 'stone': 2000, 'wood': 5000,
+                'leaves': 500, 'stone_bricks': 2000, 'wooden_planks': 1000,
+                'sticks': 1000, 'sapling': 500
+            };
+
+            // 時間系統
+            let gameTime = 6.0; // 初始時間為早上 6 點
+            
+            // 遊戲時間加速係數: 現實 1 秒 = 遊戲 1 分鐘 (1/60 遊戲小時)
+            const REAL_SECOND_TO_GAME_HOUR_FACTOR = 1 / 60; 
+            
+            // --- 輔助函數：庫存和物品 ---
+
+            /**
+             * 取得當前快捷欄選中的物品物件。
+             * @returns {object} 當前選中的格子物件。
+             */
+            function getSelectedItem() {
+                return inventoryData[27 + selectedHotbarIndex];
+            }
+
+            /**
+             * 根據方塊的 Three.js 類型名稱查找對應的 Item ID。
+             * @param {string} blockType - 方塊類型字串 (e.g., 'grass', 'stone')
+             * @returns {number | null} 對應的 Item ID 或 null
+             */
+            function getItemIdByBlockType(blockType) {
+                const entry = Object.entries(itemDefinitions).find(([, def]) => def.blockType === blockType);
+                return entry ? parseInt(entry[0]) : null;
+            }
+
+            /**
+             * 將物品添加到庫存中。
+             * @param {number} itemId - 物品ID。
+             * @param {number} count - 數量。
+             */
+            function addItemToInventory(itemId, count) {
+                if (!itemDefinitions[itemId]) return;
+
+                const maxStack = itemDefinitions[itemId].maxStack;
+                let remaining = count;
+
+                // 嘗試堆疊到現有格子
+                for (let i = 0; i < inventoryData.length && remaining > 0; i++) {
+                    if (inventoryData[i].itemId === itemId && inventoryData[i].stack < maxStack) {
+                        const canAdd = maxStack - inventoryData[i].stack;
+                        const toAdd = Math.min(remaining, canAdd);
+                        inventoryData[i].stack += toAdd;
+                        remaining -= toAdd;
+                    }
+                }
+
+                // 嘗試放入空槽
+                for (let i = 0; i < inventoryData.length && remaining > 0; i++) {
+                    if (inventoryData[i].itemId === null) {
+                        const toAdd = Math.min(remaining, maxStack);
+                        inventoryData[i].itemId = itemId;
+                        inventoryData[i].stack = toAdd;
+                        remaining -= toAdd;
+                    }
+                }
+
+                if (remaining > 0) {
+                    showMessage(`庫存已滿，無法取得 ${itemDefinitions[itemId].name} x ${remaining}`);
+                }
+                renderInventoryUI();
+            }
+
+            // --- 庫存 UI 渲染邏輯 ---
+
+            /**
+             * 渲染單一庫存格子。
+             * @param {number} index - 庫存陣列索引。
+             * @param {HTMLElement} container - 容納格子的 DOM 元素。
+             * @param {boolean} isHotbar - 是否為快捷欄。
+             */
+            function renderSlot(index, container, isHotbar) {
+                const item = inventoryData[index];
+                const definition = itemDefinitions[item.itemId];
+
+                const slotEl = document.createElement('div');
+                slotEl.className = 'inventory-slot rounded-md';
+                slotEl.setAttribute('data-slot-index', index);
+                slotEl.setAttribute('draggable', item.itemId !== null);
+
+                let content = '';
+                if (item.itemId !== null) {
+                    content += `<span class="item-icon">${definition.icon}</span>`;
+                    if (item.stack > 1) {
+                        content += `<span class="stack-count">${item.stack}</span>`;
+                    }
+                }
+                slotEl.innerHTML = content;
+                
+                // 快捷欄選中狀態
+                if (isHotbar && (index - 27) === selectedHotbarIndex) {
+                    slotEl.classList.add('selected-hotbar');
+                }
+
+                // 僅在模態視窗打開時添加拖曳事件，否則只添加點擊
+                if (isInventoryOpen) {
+                    slotEl.addEventListener('click', () => handleSlotClick(index));
+                    slotEl.addEventListener('dragstart', handleDragStart);
+                    slotEl.addEventListener('dragover', handleDragOver);
+                    slotEl.addEventListener('drop', handleDrop);
+                    slotEl.addEventListener('dragend', handleDragEnd);
+                } else if (isHotbar) {
+                     // 遊戲中快捷欄點擊時，切換選中狀態
+                    slotEl.addEventListener('click', () => {
+                        selectedHotbarIndex = index - 27;
+                        renderInventoryUI();
+                    });
+                }
+                
+                container.appendChild(slotEl);
+            }
+
+            /**
+             * 重新繪製所有庫存和快捷欄 UI。
+             */
+            function renderInventoryUI() {
+                // 1. 渲染主庫存 (0-26)
+                mainInventoryGrid.innerHTML = '';
+                for (let i = 0; i < 27; i++) {
+                    renderSlot(i, mainInventoryGrid, false);
+                }
+
+                // 2. 渲染模態視窗中的快捷欄 (27-35)
+                inventoryHotbarGrid.innerHTML = '';
+                for (let i = 27; i < 36; i++) {
+                    renderSlot(i, inventoryHotbarGrid, true);
+                }
+                
+                // 3. 渲染遊戲中的 HUD 快捷欄 (27-35)
+                hotbarHUD.innerHTML = '';
+                for (let i = 27; i < 36; i++) {
+                    renderSlot(i, hotbarHUD, true);
+                }
+                
+                // 4. 更新工具耐久度顯示
+                updateDurabilityUI();
+            }
+
+            /**
+             * 處理格子點擊事件 (僅在庫存開啟時)。
+             * @param {number} index - 被點擊的格子索引。
+             */
+            function handleSlotClick(index) {
+                // 清除 info panel 的選中狀態，但保留 hotbar 的 selected-hotbar
+                document.querySelectorAll('#main-inventory-grid .inventory-slot, #inventory-hotbar-grid .inventory-slot').forEach(el => el.classList.remove('active'));
+
+                const item = inventoryData[index];
+                const slotEl = document.querySelector(`#inventory-modal [data-slot-index="${index}"]`);
+                
+                if (slotEl) {
+                    slotEl.classList.add('active');
+                }
+
+                if (item.itemId !== null) {
+                    const definition = itemDefinitions[item.itemId];
+                    itemNameDisplay.textContent = `物品: ${definition.name}`;
+                    itemDetailsDisplay.innerHTML = `
+                        堆疊數量: ${item.stack}<br>
+                        最大堆疊: ${definition.maxStack}<br>
+                        庫存索引: ${index} (${index < 27 ? '主庫存' : '快捷欄'})
+                    `;
+                } else {
+                    itemNameDisplay.textContent = `空槽 (索引: ${index})`;
+                    itemDetailsDisplay.textContent = '此槽位目前沒有任何物品。';
+                }
+            }
+
+            // --- 拖放邏輯 ---
+            function handleDragStart(e) {
+                const index = parseInt(e.target.getAttribute('data-slot-index'));
+                if (inventoryData[index].itemId === null) {
+                    e.preventDefault();
+                    return;
+                }
+                draggedSlot = index;
+                e.dataTransfer.setData('text/plain', index);
+                setTimeout(() => e.target.classList.add('dragging'), 0);
+            }
+
+            function handleDragOver(e) {
+                e.preventDefault(); 
+            }
+
+            function handleDrop(e) {
+                e.preventDefault();
+                const targetIndex = parseInt(e.currentTarget.getAttribute('data-slot-index'));
+                const sourceIndex = draggedSlot;
+
+                if (sourceIndex === null || sourceIndex === targetIndex) return;
+
+                // 執行物品交換 (簡單交換邏輯)
+                [inventoryData[sourceIndex], inventoryData[targetIndex]] = 
+                [inventoryData[targetIndex], inventoryData[sourceIndex]];
+
+                // 更新 slot 索引 (雖然在這個應用中 slot 屬性不嚴格需要，但保持資料完整性)
+                inventoryData[sourceIndex].slot = sourceIndex;
+                inventoryData[targetIndex].slot = targetIndex;
+
+                renderInventoryUI();
+                handleSlotClick(targetIndex);
+            }
+
+            function handleDragEnd(e) {
+                e.target.classList.remove('dragging');
+                draggedSlot = null; 
+            }
+            
+            // --- 合成邏輯 ---
+            
+            /**
+             * 嘗試合成物品。
+             * @param {number} resultItemId - 合成後的物品ID。
+             * @param {object} recipe - 所需材料 {itemId: count}。
+             */
+            window.craftItem = function(resultItemId, recipe) {
+                const resultDef = itemDefinitions[resultItemId];
+                if (!resultDef) return;
+
+                // 1. 檢查材料是否足夠
+                let canCraft = true;
+                for (const [requiredItemIdStr, requiredCount] of Object.entries(recipe)) {
+                    const requiredItemId = parseInt(requiredItemIdStr);
+                    let foundCount = 0;
+                    
+                    // 遍歷所有格子計算總數
+                    inventoryData.forEach(item => {
+                        if (item.itemId === requiredItemId) {
+                            foundCount += item.stack;
+                        }
+                    });
+
+                    if (foundCount < requiredCount) {
+                        canCraft = false;
+                        showMessage(`缺少材料: ${itemDefinitions[requiredItemId].name} x ${requiredCount - foundCount}`);
+                        break;
+                    }
+                }
+
+                if (canCraft) {
+                    // 2. 消耗材料 (從庫存中移除)
+                    for (const [requiredItemIdStr, requiredCount] of Object.entries(recipe)) {
+                        let toRemove = requiredCount;
+                        const requiredItemId = parseInt(requiredItemIdStr);
+                        
+                        // 從後往前移除 (避免影響快捷欄)
+                        for (let i = inventoryData.length - 1; i >= 0 && toRemove > 0; i--) {
+                            const item = inventoryData[i];
+                            if (item.itemId === requiredItemId) {
+                                const removed = Math.min(toRemove, item.stack);
+                                item.stack -= removed;
+                                toRemove -= removed;
+
+                                if (item.stack <= 0) {
+                                    item.itemId = null;
+                                    item.stack = 0;
+                                }
+                            }
+                        }
+                    }
+
+                    // 3. 產出結果
+                    // 木板和木棍通常一次產出多個
+                    let outputCount = 1;
+                    if (resultItemId === 7) outputCount = 4; // 木板
+                    if (resultItemId === 8) outputCount = 4; // 木棍
+                    
+                    addItemToInventory(resultItemId, outputCount);
+                    showMessage(`成功合成 ${resultDef.name} x ${outputCount}！`);
+                }
+            }
+
+
+            // --- 遊戲初始化和迴圈 (沿用 NaN 修正後的代碼) ---
+            
+            function init() {
+                // THREE.js 和 CANNON.js 初始化...
+                scene = new THREE.Scene();
+                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+                renderer = new THREE.WebGLRenderer();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+                document.body.appendChild(renderer.domElement);
+
+                ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
+                scene.add(ambientLight);
+                directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
+                scene.add(directionalLight);
+
+                world = new CANNON.World();
+                world.gravity.set(0, -9.82, 0);
+                world.broadphase = new CANNON.NaiveBroadphase();
+
+                generateWorld();
+                createPigs();
+
+                // 事件監聽器
+                window.addEventListener('keydown', onKeyDown);
+                window.addEventListener('keyup', (e) => keyboard[e.key] = false);
+                window.addEventListener('resize', onWindowResize);
+                window.addEventListener('mousedown', onMouseDown);
+                window.addEventListener('mouseup', onMouseUp);
+                document.addEventListener('mousemove', onMouseMove);
+                document.addEventListener('pointerlockchange', pointerLockChange, false);
+                
+                // 初始 UI 渲染和玩家創建
+                renderInventoryUI();
+                updateHealthUI(); // 將顯示 50/100
+                updateTimeAndLighting(gameTime); 
+                createPlayer(); 
+                
+                requestAnimationFrame(animate);
+                
+                // 首次嘗試鎖定滑鼠
+                document.body.requestPointerLock().catch(() => {});
+            }
+
+
+            // --- 遊戲事件處理 (部分更新) ---
+            
+            function onKeyDown(e) {
+                keyboard[e.key] = true;
+                
+                // C 鍵：切換庫存/模態視窗
+                if (e.key.toLowerCase() === 'c') {
+                    toggleInventory();
+                }
+
+                // 數字鍵：切換快捷欄 (1 到 9)
+                let keyIndex = parseInt(e.key) - 1;
+                if (!isNaN(keyIndex) && keyIndex >= 0 && keyIndex <= 8) {
+                    selectedHotbarIndex = keyIndex;
+                    renderInventoryUI(); // 更新選中狀態
+                    
+                    const item = getSelectedItem();
+                    const name = item.itemId ? itemDefinitions[item.itemId].name : '空';
+                    showMessage(`已選擇快捷欄 ${keyIndex + 1}: ${name}`);
+                }
+            }
+            
+            /**
+             * 切換庫存介面顯示狀態。
+             */
+            function toggleInventory() {
+                isInventoryOpen = !isInventoryOpen;
+                inventoryModal.style.display = isInventoryOpen ? 'flex' : 'none';
+                
+                if (isInventoryOpen) {
+                    document.exitPointerLock();
+                    renderInventoryUI(); // 確保庫存開啟時，UI 帶有拖曳功能
+                    showMessage("庫存開啟。點擊 C 鍵或畫面外區域關閉。");
+                } else {
+                    document.body.requestPointerLock().catch(() => {});
+                    renderInventoryUI(); // 確保庫存關閉時，UI 移除拖曳功能
+                }
+            }
+
+
+            function onMouseDown(event) {
+                if (isGameOver || isInventoryOpen) return;
+                
+                if (document.pointerLockElement === document.body) {
+                    const selectedItem = getSelectedItem();
+                    const selectedItemId = selectedItem.itemId;
+
+                    const raycaster = new THREE.Raycaster();
+                    const origin = new THREE.Vector3();
+                    camera.getWorldPosition(origin);
+                    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                    raycaster.set(origin, direction);
+
+                    const maxInteractionDistance = 5; 
+                    const intersects = raycaster.intersectObjects(scene.children, true).filter(i => i.distance < maxInteractionDistance);
+
+                    if (intersects.length > 0) {
+                        const firstIntersect = intersects[0];
+                        const rootObject = getRootObject(firstIntersect.object);
+                        
+                        if (event.button === 0) { // 左鍵挖掘或攻擊
+                            
+                            if (rootObject.userData.isBlock) {
+                                // 挖掘方塊邏輯
+                                const blockType = rootObject.userData.type;
+                                const isStone = blockType === 'stone';
+                                const isPickaxe = selectedItemId === 9; // 木鎬 ID
+                                
+                                // 檢查工具耐久度
+                                if (isStone && isPickaxe && currentPickaxeDurability <= 0) {
+                                     showMessage("你的木鎬已損壞，無法挖掘石頭。");
+                                     return;
+                                }
+
+                                // 開始挖掘
+                                removeDiggingEffect();
+                                isDigging = true;
+                                diggingStartTime = performance.now();
+                                diggingBlockId = rootObject.userData.blockId;
+
+                                diggingEffect = new THREE.BoxHelper(rootObject, 0x00ff00);
+                                scene.add(diggingEffect);
+                                
+                            } else if (rootObject.userData.type === 'pig') {
+                                // 攻擊豬隻邏輯 (保持不變)
+                                const pigIndex = pigMeshes.findIndex(mesh => mesh === rootObject);
+                                if (pigIndex !== -1) {
+                                    const pigBody = pigBodies[pigIndex];
+                                    pigBody.userData.health -= playerDamage;
+                                    showMessage(`你攻擊了一頭豬！ (剩餘生命值: ${pigBody.userData.health})`);
+                                    if (pigBody.userData.health <= 0) {
+                                        removePig(pigIndex);
+                                    }
+                                }
+                            }
+                        } else if (event.button === 2) { // 右鍵建造或吃東西
+                            
+                            if (!selectedItemId) {
+                                showMessage("你手上沒有東西！");
+                                return;
+                            }
+
+                            const selectedDef = itemDefinitions[selectedItemId];
+
+                            // 1. 吃東西邏輯
+                            if (selectedDef.edible) {
+                                const healAmount = 20;
+
+                                if (selectedItem.stack > 0) {
+                                    if (playerHealth < maxHealth) {
+                                        // 消耗物品
+                                        selectedItem.stack--;
+                                        if (selectedItem.stack === 0) selectedItem.itemId = null;
+                                        
+                                        // 恢復生命值
+                                        playerHealth = Math.min(maxHealth, playerHealth + healAmount);
+                                        updateHealthUI();
+                                        renderInventoryUI();
+                                        showMessage(`你吃了 ${selectedDef.name}，恢復了 ${healAmount} 點生命值！`);
+                                    } else {
+                                        // 生命值已滿
+                                        showMessage("你的生命值已滿 (100/100)，無法食用。");
+                                    }
+                                } else {
+                                    showMessage("你的庫存裡沒有這個物品了！");
+                                }
+                                return; // 關鍵：處理食物後返回，避免執行放置方塊邏輯
+                            }
+
+                            // 2. 放置方塊邏輯
+                            if (selectedDef.tool) { // 木鎬無法放置
+                                showMessage(`${selectedDef.name} 無法放置。`);
+                                return;
+                            }
+                            
+                            const blockTypeToPlace = selectedDef.blockType;
+                            
+                            if (selectedItem.stack > 0) {
+                                const newBlockPos = firstIntersect.point.clone().add(firstIntersect.face.normal.clone().multiplyScalar(BLOCK_DIMENSIONS / 2));
+                                
+                                const placeX = Math.round(newBlockPos.x);
+                                const placeY = Math.round(newBlockPos.y);
+                                const placeZ = Math.round(newBlockPos.z);
+                                
+                                // 簡易檢查放置位置是否與玩家重疊
+                                if (
+                                    placeX === Math.round(player.position.x) && 
+                                    placeZ === Math.round(player.position.z) && 
+                                    (placeY === Math.round(player.position.y) || placeY === Math.round(player.position.y + 1)) 
+                                ) {
+                                    showMessage("你不能將方塊放置在你的身體裡！");
+                                    return;
+                                }
+
+                                addBlock(placeX, placeY, placeZ, blockTypeToPlace);
+                                selectedItem.stack--;
+                                if (selectedItem.stack === 0) selectedItem.itemId = null;
+                                
+                                renderInventoryUI();
+                                showMessage(`你放置了一個${selectedDef.name}！`);
+                            } else {
+                                showMessage("你的庫存裡沒有這個方塊了！");
+                            }
+                        }
+                    }
+                } else {
+                    // 如果滑鼠沒有鎖定 (即庫存已關閉)，點擊時嘗試鎖定
+                    if (!isInventoryOpen) {
+                         document.body.requestPointerLock().catch(() => {});
+                    }
+                }
+            }
+
+            function onMouseUp(event) {
+                // 如果放開滑鼠左鍵，停止挖掘並移除效果
+                if (event.button === 0 && !isInventoryOpen) {
+                    isDigging = false;
+                    diggingBlockId = null;
+                    removeDiggingEffect();
+                    showMessage('');
+                }
+            }
+            
+            function onMouseMove(event) {
+                 // 只有在庫存關閉時才允許視角移動
+                if (document.pointerLockElement === document.body && !isInventoryOpen) {
+                    const movementX = event.movementX || event.mozMovementX || 0;
+                    const movementY = event.movementY || event.mozMovementY || 0;
+
+                    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
+                    euler.setFromQuaternion(camera.quaternion);
+
+                    euler.y -= movementX * 0.002;
+                    euler.x -= movementY * 0.002;
+
+                    euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+
+                    camera.quaternion.setFromEuler(euler);
+                }
+            }
+            
+            function updatePlayerMovement() {
+                const speed = 5;
+                const velocity = new CANNON.Vec3(0, playerBody.velocity.y, 0); 
+                
+                // 只有在庫存關閉時才允許移動
+                if (isInventoryOpen) {
+                    playerBody.velocity.x = 0;
+                    playerBody.velocity.z = 0;
+                    return;
+                }
+
+                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
+                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
+
+                let moveX = 0;
+                let moveZ = 0;
+
+                if (keyboard['w']) { moveX += forward.x; moveZ += forward.z; }
+                if (keyboard['s']) { moveX -= forward.x; moveZ -= forward.z; }
+                if (keyboard['a']) { moveX -= right.x; moveZ -= right.z; }
+                if (keyboard['d']) { moveX += right.x; moveZ += right.z; }
+
+                const magnitude = Math.sqrt(moveX * moveX + moveZ * moveZ);
+                if (magnitude > 0) {
+                    moveX /= magnitude;
+                    moveZ /= magnitude;
+                }
+
+                playerBody.velocity.x = moveX * speed;
+                playerBody.velocity.z = moveZ * speed;
+
+                if (keyboard[' '] && canJump) {
+                    const jumpVelocity = 6;
+                    playerBody.velocity.y = jumpVelocity;
+                    canJump = false; 
+                }
+            }
+
+
+            function animate(time) {
+                if (isGameOver) return;
+
+                requestAnimationFrame(animate);
+                
+                let dt = (time - (lastTime || time)) / 1000;
+                const maxDt = 1 / 10; 
+                const safeDt = Math.min(dt, maxDt);
+                lastTime = time; 
+                
+                // --- 遊戲邏輯更新 ---
+                if (!isInventoryOpen) {
+                    world.step(1/60, safeDt, 3);
+                    
+                    // 根據新的時間加速係數更新遊戲時間: 1 秒 (safeDt) = 1/60 遊戲小時
+                    gameTime = (gameTime + safeDt * REAL_SECOND_TO_GAME_HOUR_FACTOR) % 24; 
+                    updateTimeAndLighting(gameTime);
+
+                    updatePlayerMovement();
+                    updatePigs(time);
+                    
+                    player.position.copy(playerBody.position);
+
+                    // 檢查挖掘進度 (只有在非庫存狀態下才更新)
+                    checkDiggingProgress(time);
+                    checkSaplingGrowth(time);
+                    checkFallDamage();
+                    
+                    if (time - lastCullTime > 5000) {
+                        cullDistantObjects();
+                        lastCullTime = time;
+                    }
+                } else {
+                    // 庫存開啟時，仍須檢查耐久度，但遊戲不動
+                    updateDurabilityUI();
+                }
+                
+                renderer.render(scene, camera);
+            }
+            
+            // --- 挖掘邏輯 ---
+            function checkDiggingProgress(time) {
+                if (isDigging && diggingBlockId) {
+                    const selectedItem = getSelectedItem();
+                    const selectedItemId = selectedItem.itemId;
+                    
+                    // 檢查目標方塊是否還存在 (防止挖掘目標消失後進度條不消失)
+                    const blockMesh = blockMeshes.get(diggingBlockId);
+                    if (!blockMesh) {
+                         isDigging = false;
+                         diggingBlockId = null;
+                         removeDiggingEffect();
+                         showMessage('挖掘已中斷。');
+                         return;
+                    }
+                    
+                    const blockType = blockMesh.userData.type;
+                    let duration = blockDurations[blockType] || 2000;
+
+                    // 加速挖掘：木鎬(9)挖石頭(3)
+                    const isPickaxe = selectedItemId === 9; 
+                    const isStone = blockType === 'stone';
+                    
+                    if (isPickaxe && isStone) {
+                        duration /= 1.5;
+                    }
+
+                    const elapsedTime = time - diggingStartTime;
+                    const progress = Math.min(1, elapsedTime / duration);
+                    const progressPercentage = Math.round(progress * 100);
+
+                    // 更新挖掘效果
+                    const color = new THREE.Color(0x00ff00).lerp(new THREE.Color(0xff0000), progress);
+                    if (!diggingEffect) {
+                        diggingEffect = new THREE.BoxHelper(blockMesh, 0x00ff00);
+                        scene.add(diggingEffect);
+                    }
+                    diggingEffect.material.color.copy(color);
+
+                    showMessage(`正在挖掘 ${blockType} 方塊... (${progressPercentage}%)`);
+
+                    if (elapsedTime >= duration) {
+                        // 挖掘完成
+                        const minedItemId = getItemIdByBlockType(blockType);
+
+                        // --- 耐久度扣除邏輯 ---
+                        if (isPickaxe && isStone && selectedItem.stack > 0) {
+                            currentPickaxeDurability--;
+                            
+                            if (currentPickaxeDurability <= 0) {
+                                selectedItem.stack--; // 消耗一個工具
+                                
+                                if (selectedItem.stack > 0) {
+                                    currentPickaxeDurability = WOODEN_PICKAXE_MAX_DURABILITY;
+                                    showMessage("你的木鎬壞了！幸好你還有備用的。");
+                                } else {
+                                    selectedItem.itemId = null; // 該槽位清空
+                                    currentPickaxeDurability = 0;
+                                    showMessage("你的木鎬徹底壞了，必須再合成一個！");
+                                }
+                            }
+                        }
+                        
+                        // 處理樹葉掉落樹苗
+                        let dropCount = 1;
+                        if (blockType === 'leaves' && Math.random() < 0.3) {
+                            addItemToInventory(10, 1); // 掉落樹苗 ID 10
+                            dropCount = 0; // 不再掉落樹葉方塊本身
+                        }
+                        
+                        // 增加物品到庫存
+                        if (minedItemId && dropCount > 0) {
+                             addItemToInventory(minedItemId, dropCount);
+                             showMessage(`你挖掘了一個${itemDefinitions[minedItemId].name}！`);
+                        }
+                        
+                        removeBlock(diggingBlockId);
+                        removeDiggingEffect(); 
+                        isDigging = false;
+                        diggingBlockId = null;
+                        renderInventoryUI(); // 更新耐久度
+                    }
+                }
+            }
+            
+            function checkFallDamage() {
+                // 沿用舊的墜落傷害檢查邏輯
+                const currentY = playerBody.position.y;
+                const velocityY = playerBody.velocity.y;
+                const tolerance = 0.1; 
+
+                if (velocityY < -tolerance && !isFalling) {
+                    isFalling = true;
+                    fallStartY = currentY;
+                } 
+                
+                // 地面檢查 (Raycasting)
+                const rayStart = playerBody.position;
+                const rayEnd = new CANNON.Vec3(rayStart.x, rayStart.y - 1.0, rayStart.z); 
+                const result = new CANNON.RaycastResult();
+                world.raycastClosest(rayStart, rayEnd, { skip: [playerBody] }, result);
+                canJump = result.hasHit;
+                
+                if (isFalling && canJump) {
+                    const fallDistance = fallStartY - currentY;
+                    
+                    if (fallDistance >= minFallHeight) {
+                        const damage = Math.round((fallDistance - minFallHeight) * fallDamageFactor);
+
+                        if (damage > 0) {
+                            takeDamage(damage);
+                            showMessage(`你從 ${fallDistance.toFixed(1)} 格高處摔落，受到了 ${damage} 點傷害！`);
+                            if (playerHealth <= 0) {
+                                gameOver();
+                            }
+                        }
+                    } 
+                    
+                    isFalling = false;
+                    fallStartY = null;
+                }
+            }
+            
+            // --- 雜項 UI/遊戲輔助函數 (更新 updateHealthUI) ---
+
+            /**
+             * 讓玩家受到傷害。
+             * @param {number} damageAmount - 傷害量。
+             */
+            function takeDamage(damageAmount) {
+                playerHealth = Math.max(0, playerHealth - damageAmount);
+                updateHealthUI();
+                if (playerHealth === 0) {
+                    gameOver();
+                }
+            }
+
+            function updateDurabilityUI() {
+                const selectedItem = getSelectedItem();
+                const isPickaxeSelected = selectedItem.itemId === 9; // 木鎬 ID
+
+                if (isPickaxeSelected && selectedItem.stack > 0) {
+                    durabilityDisplay.style.display = 'block';
+                    durabilityDisplay.textContent = `木鎬耐久度: ${currentPickaxeDurability} / ${WOODEN_PICKAXE_MAX_DURABILITY}`;
+                    
+                    if (currentPickaxeDurability < 10) {
+                        durabilityDisplay.style.backgroundColor = 'rgba(231, 76, 60, 0.8)';
+                    } else if (currentPickaxeDurability < 30) {
+                        durabilityDisplay.style.backgroundColor = 'rgba(241, 196, 15, 0.8)';
+                    } else {
+                        durabilityDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                    }
+                } else {
+                    durabilityDisplay.style.display = 'none';
+                }
+            }
+
+            function updateTimeAndLighting(time) {
+                 const dayColor = new THREE.Color(0x70a1d6);
+                 const nightColor = new THREE.Color(0x1a1a33);
+                 
+                 let skyColor;
+                 if (time >= 6 && time < 18) { skyColor = dayColor; } 
+                 else if (time >= 18 && time < 19) { const factor = time - 18; skyColor = dayColor.clone().lerp(nightColor, factor); } 
+                 else if (time >= 5 && time < 6) { const factor = 6 - time; skyColor = nightColor.clone().lerp(dayColor, 1 - factor); } 
+                 else { skyColor = nightColor; }
+
+                 scene.background = skyColor;
+
+                 let ambientIntensity;
+                 if (time >= 6 && time < 18) { ambientIntensity = 0.8; } 
+                 else if (time >= 18 && time < 19) { ambientIntensity = THREE.MathUtils.lerp(0.8, 0.2, time - 18); } 
+                 else if (time >= 5 && time < 6) { ambientIntensity = THREE.MathUtils.lerp(0.2, 0.8, time - 5); } 
+                 else { ambientIntensity = 0.2; }
+                 ambientLight.intensity = ambientIntensity;
+
+                 let sunMoonIntensity = ambientIntensity * 1.2; 
+                 if (time > 18 || time < 6) { sunMoonIntensity *= 0.5; }
+                 directionalLight.intensity = sunMoonIntensity;
+                 
+                 const angle = (time / 24) * Math.PI * 2; 
+                 const sunX = Math.sin(angle) * 20;
+                 const sunY = Math.cos(angle) * 20;
+                 directionalLight.position.set(sunX, sunY, 0);
+                 directionalLight.lookAt(0, 0, 0);
+                 
+                 const hours = Math.floor(time) % 24;
+                 const minutes = Math.floor((time - hours) * 60);
+                 const displayHours = isNaN(hours) ? '06' : String(hours).padStart(2, '0');
+                 const displayMinutes = isNaN(minutes) ? '00' : String(minutes).padStart(2, '0');
+
+                 timeDisplay.textContent = `時間: ${displayHours}:${displayMinutes}`;
+            }
+
+            function updateHealthUI() {
+                playerHealth = Math.max(0, Math.min(maxHealth, playerHealth));
+                healthBar.style.width = `${(playerHealth / maxHealth) * 100}%`;
+                healthText.textContent = `${playerHealth} / ${maxHealth}`;
+            }
+
+            function showMessage(text) {
+                messageBox.textContent = text;
+            }
+            
+            // ... (其他未變動的遊戲邏輯函數)
+            
+            function generateWorld() {
+                const groundMaterial = new CANNON.Material();
+                const groundBody = new CANNON.Body({
+                    mass: 0,
+                    shape: new CANNON.Plane(),
+                    material: groundMaterial
+                });
+                groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
+                world.addBody(groundBody);
+
+                for (let x = -15; x <= 15; x++) {
+                    for (let z = -15; z <= 15; z++) {
+                        const y = Math.floor(Math.random() * 2) - 1;
+                        addBlock(x, y, z, 'grass');
+                        addBlock(x, y - 1, z, 'dirt');
+                        addBlock(x, y - 2, z, 'stone');
+                    }
+                }
+                
+                const numTrees = 5;
+                for (let i = 0; i < numTrees; i++) {
+                    const x = (Math.random() - 0.5) * 20;
+                    const z = (Math.random() - 0.5) * 20;
+                    createTree(Math.round(x), 0, Math.round(z));
+                }
+            }
+
+            function createTree(x, y, z) {
+                const trunkHeight = 3 + Math.floor(Math.random() * 2);
+                for (let i = 0; i < trunkHeight; i++) {
+                    addBlock(x, y + i, z, 'wood');
+                }
+
+                const leavesHeight = trunkHeight + 1;
+                for (let i = -1; i <= 1; i++) {
+                    for (let j = -1; j <= 1; j++) {
+                        for (let k = -1; k <= 1; k++) {
+                            if (!(i === 0 && j === 0 && k === 0) || Math.abs(i) + Math.abs(j) + Math.abs(k) === 1) {
+                                addBlock(x + i, leavesHeight + j, z + k, 'leaves');
+                            }
+                        }
+                    }
+                }
+            }
+
+            function createPigs() {
+                const numPigs = 5;
+                for (let i = 0; i < numPigs; i++) {
+                    const x = (Math.random() - 0.5) * 20;
+                    const z = (Math.random() - 0.5) * 20;
+                    createPig(x, 1, z);
+                }
+            }
+
+            function createPig(x, y, z) {
+                const pigGroup = new THREE.Group();
+                const pigColor = blockColors['pig'];
+
+                const bodyGeometry = new THREE.BoxGeometry(1.2, 0.8, 2);
+                const bodyMaterial = new THREE.MeshPhongMaterial({ color: pigColor });
+                const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
+                pigGroup.add(bodyMesh);
+
+                const headGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
+                const headMaterial = new THREE.MeshPhongMaterial({ color: pigColor });
+                const headMesh = new THREE.Mesh(headGeometry, headMaterial);
+                headMesh.position.z = 1.4;
+                pigGroup.add(headMesh);
+                
+                pigGroup.position.set(x, y, z);
+                scene.add(pigGroup);
+                
+                pigGroup.userData = { type: 'pig' };
+
+                const pigShape = new CANNON.Box(new CANNON.Vec3(0.6, 0.4, 1));
+                const pigBody = new CANNON.Body({ mass: 1, position: new CANNON.Vec3(x, y, z), shape: pigShape });
+                pigBody.userData = { type: 'pig', health: 20, lastWanderTime: 0 };
+                pigBody.linearDamping = 0.9;
+                world.addBody(pigBody);
+
+                pigMeshes.push(pigGroup);
+                pigBodies.push(pigBody);
+            }
+
+            function createPlayer() {
+                player = new THREE.Object3D();
+                scene.add(player);
+                player.position.set(0, 5, 0);
+
+                const playerShape = new CANNON.Cylinder(0.5, 0.5, 1.8, 16); 
+                playerBody = new CANNON.Body({ mass: 1, position: new CANNON.Vec3(0, 5, 0), shape: playerShape });
+                playerBody.fixedRotation = true;
+                playerBody.linearDamping = 0.95; 
+                world.addBody(playerBody);
+
+                player.add(camera);
+                camera.position.set(0, 0.9, 0); 
+            }
+
+            function addBlock(x, y, z, type) {
+                const blockGeometry = new THREE.BoxGeometry(BLOCK_DIMENSIONS, BLOCK_DIMENSIONS, BLOCK_DIMENSIONS);
+                const blockMaterial = new THREE.MeshPhongMaterial({ color: blockColors[type] });
+                const mesh = new THREE.Mesh(blockGeometry, blockMaterial);
+                scene.add(mesh);
+                mesh.position.set(x, y, z);
+                
+                const blockId = `${x}-${y}-${z}`;
+                mesh.userData = { type: type, blockId: blockId, isBlock: true };
+
+                const blockShape = new CANNON.Box(new CANNON.Vec3(BLOCK_DIMENSIONS/2, BLOCK_DIMENSIONS/2, BLOCK_DIMENSIONS/2));
+                const blockBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, y, z), shape: blockShape });
+                blockBody.userData = { blockId: blockId, isBlock: true };
+                world.addBody(blockBody);
+                
+                blockMeshes.set(blockId, mesh);
+                blockBodies.set(blockId, blockBody);
+
+                if (type === 'sapling') {
+                    saplingGrowthTracker.set(blockId, performance.now());
+                }
+            }
+
+            function removeBlock(blockId) {
+                const blockMesh = blockMeshes.get(blockId);
+                const blockBody = blockBodies.get(blockId);
+
+                if (blockMesh) {
+                    scene.remove(blockMesh);
+                    blockMeshes.delete(blockId);
+                }
+
+                if (blockBody) {
+                    world.removeBody(blockBody);
+                    blockBodies.delete(blockId);
+                }
+
+                if (saplingGrowthTracker.has(blockId)) {
+                    saplingGrowthTracker.delete(blockId);
+                }
+            }
+
+            function removeDiggingEffect() {
+                if (diggingEffect) {
+                    scene.remove(diggingEffect);
+                    diggingEffect = null;
+                }
+            }
+
+            function removePig(pigIndex) {
+                if (pigIndex < 0 || pigIndex >= pigMeshes.length) return;
+                
+                // 掉落豬肉 (ID 11)
+                addItemToInventory(11, 1);
+
+                scene.remove(pigMeshes[pigIndex]);
+                world.removeBody(pigBodies[pigIndex]);
+                pigMeshes.splice(pigIndex, 1);
+                pigBodies.splice(pigIndex, 1);
+                
+                showMessage("你擊敗了一頭豬，獲得了一塊豬肉！");
+            }
+
+            function getRootObject(object) {
+                return object.parent && object.parent.isGroup ? object.parent : object;
+            }
+
+            window.onload = function() {
+                init();
+            };
+
+            document.addEventListener('contextmenu', (e) => e.preventDefault());
+
+            function onWindowResize() {
+                camera.aspect = window.innerWidth / window.innerHeight;
+                camera.updateProjectionMatrix();
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            }
+            
+            function pointerLockChange() {
+                if (document.pointerLockElement === document.body) {
+                    if (!isInventoryOpen) {
+                         showMessage("點擊滑鼠左鍵挖掘/攻擊，右鍵建造/進食。按空白鍵跳躍。");
+                    }
+                } else {
+                    if (!isInventoryOpen) {
+                        showMessage("點擊畫面以控制人物。按 C 鍵打開背包。遊戲時間為 1:60 加速。");
+                    }
+                }
+            }
+            
+            function gameOver() {
+                isGameOver = true;
+                document.exitPointerLock();
+                
+                showMessage("遊戲結束！你的生命值為零。請重新整理頁面以重新開始。");
+            }
+
+            function checkSaplingGrowth(currentTime) {
+                const saplingsToGrow = [];
+                const growthDuration = 30000; 
+
+                for (const [blockId, placementTime] of saplingGrowthTracker.entries()) {
+                    if (currentTime - placementTime >= growthDuration) {
+                        saplingsToGrow.push(blockId);
+                    }
+                }
+
+                for (const blockId of saplingsToGrow) {
+                    const mesh = blockMeshes.get(blockId);
+                    if (mesh) {
+                        const { x, y, z } = mesh.position;
+                        removeBlock(blockId); 
+                        createTree(Math.round(x), Math.round(y), Math.round(z)); 
+                        showMessage(`一顆樹苗在 (${Math.round(x)}, ${Math.round(y)}, ${Math.round(z)}) 處長成了一棵樹!`);
+                    }
+                    saplingGrowthTracker.delete(blockId);
+                }
+            }
+            
+            function updatePigs(time) {
+                for (let i = 0; i < pigMeshes.length; i++) {
+                    const pigBody = pigBodies[i];
+                    const pigPosition = pigBody.position;
+                    
+                    pigMeshes[i].position.copy(pigPosition);
+                    pigMeshes[i].quaternion.copy(pigBody.quaternion);
+
+                    if (time - pigBody.userData.lastWanderTime > 5000) {
+                        const randomDirection = new CANNON.Vec3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 5);
+                        randomDirection.normalize();
+                        randomDirection.scale(1, randomDirection);
+                        pigBody.velocity.set(randomDirection.x, pigBody.velocity.y, randomDirection.z);
+                        pigBody.userData.lastWanderTime = time;
+                    }
+                }
+            }
+            
+            function cullDistantObjects() {
+                const playerPosition = player.position;
+                
+                const blockKeys = Array.from(blockMeshes.keys());
+                for (const blockId of blockKeys) {
+                    const mesh = blockMeshes.get(blockId);
+                    if (mesh && playerPosition.distanceTo(mesh.position) > cullingDistance) {
+                        removeBlock(blockId);
+                    }
+                }
+
+                for (let i = pigMeshes.length - 1; i >= 0; i--) {
+                    const pigMesh = pigMeshes[i];
+                    if (playerPosition.distanceTo(pigMesh.position) > cullingDistance) {
+                        removePig(i);
+                    }
+                }
+            }
+            
+        })();
+    </script>
+</body>
+</html>
