@@ -1,1445 +1,1351 @@
+
 <!DOCTYPE html>
-<html lang="zh-Hant">
+<html lang="zh-TW">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>我的世界v1.0(Alpha)</title>
+    <title>塔防遊戲 - 手動波次啟動版</title>
+    <!-- 載入 Tailwind CSS 框架 -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- 載入 Font Awesome 讓 UI 更好看 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" rel="stylesheet">
     <style>
-        /* 基礎樣式 */
-        body {
-            margin: 0;
-            overflow: hidden;
-            background-color: #2c3e50;
-            font-family: 'Inter', sans-serif;
-            color: #ecf0f1;
+        /* 設定字體為 Inter */
+        body { font-family: 'Inter', sans-serif; background-color: #f7f7f7; }
+        /* 遊戲畫布樣式 */
+        #gameCanvas {
+            border: 4px solid #3b82f6;
+            cursor: crosshair;
+            touch-action: none; /* 防止觸摸事件干擾 */
         }
-
-        canvas {
-            display: block;
+        .ui-panel {
+            background-color: #ffffff;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-
-        /* --- 遊戲 HUD 元素 --- */
-        
-        /* 保持 health-bar 的動畫效果 */
-        #health-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            height: 100%;
-            background-color: #e74c3c;
-            transition: width 0.3s ease;
+        .stat-item {
+            padding: 0.5rem 1rem;
+            border-radius: 9999px;
+            font-weight: 600;
         }
-        
-        /* HUD 元素的樣式調整為使用 Tailwind，但保留一些核心 CSS */
-        #health-text {
-            position: relative;
-            z-index: 1;
-            font-size: 0.9rem;
-            font-weight: bold;
-            color: white;
+        /* 響應式佈局調整 */
+        @media (max-width: 768px) {
+            .game-container { flex-direction: column; }
+            .ui-panel { margin-top: 1rem; }
+            #gameCanvas { width: 100%; height: auto; }
         }
-        
-        #time-display {
-            position: absolute;
-            top: 20px;
-            right: 20px;
-            background-color: rgba(0, 0, 0, 0.5);
-            color: white;
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 1.2rem;
-            z-index: 100;
-        }
-
-        #durability-display {
-            position: absolute;
-            top: 60px;
-            right: 20px;
-            background-color: rgba(0, 0, 0, 0.6);
-            color: white;
-            padding: 8px;
-            border-radius: 5px;
-            font-size: 0.9rem;
-            z-index: 100;
-            display: none; /* 預設隱藏 */
-            min-width: 150px;
-            text-align: center;
-        }
-
-        #crosshair {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 5px;
-            height: 5px;
-            border-radius: 50%;
-            background-color: white;
-            border: 1px solid black;
-            pointer-events: none;
-            z-index: 100;
-        }
-        
-        #message-box {
-            position: absolute;
-            top: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 10px 15px;
-            border-radius: 8px;
-            font-size: 0.9rem;
-            min-height: 20px;
-            text-align: center;
-            z-index: 100;
-        }
-
-        /* --- 庫存 UI 樣式 --- */
-        #inventory-modal {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background-color: rgba(0, 0, 0, 0.7);
-            display: none; /* 預設隱藏 */
-            align-items: center;
-            justify-content: center;
-            z-index: 200;
-        }
-
-        #inventory-content {
-            background-color: #5c6e7a; /* 淺藍灰色背景 */
-            padding: 20px;
-            border-radius: 10px;
-            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
-            border: 3px solid #34495e;
-            display: flex;
-            flex-direction: column;
-            gap: 20px;
-        }
-
-        .inventory-grid-container {
-            display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            gap: 4px; /* 緊湊的格子間距 */
-        }
-        
-        .inventory-slot {
-            width: 45px;
-            height: 45px;
-            background-color: #8395a7; 
-            border: 2px solid #5c6e7a; 
-            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            position: relative;
-            cursor: pointer;
-            transition: all 0.05s ease-out;
-            user-select: none;
-        }
-        .inventory-slot:hover {
-            background-color: #98a9b9;
-        }
-        .inventory-slot.selected-hotbar {
-            border: 3px solid #f39c12; /* 快捷欄選中邊框 */
-        }
-
-        .item-icon {
-            font-size: 24px;
-            line-height: 1;
-            user-select: none;
+        /* 訊息框動畫 */
+        .message-box {
+            transition: opacity 0.3s ease-in-out;
+            opacity: 0;
             pointer-events: none;
         }
-
-        .stack-count {
-            position: absolute;
-            bottom: 0;
-            right: 2px;
-            color: white;
-            font-size: 10px;
-            font-weight: bold;
-            text-shadow: 1px 1px 0 #000, -1px -1px 0 #000;
-            user-select: none;
-            pointer-events: none;
-        }
-        
-        .dragging {
-            opacity: 0.5;
-            transform: scale(1.05);
-        }
-
-        /* 快捷欄在遊戲中的顯示 */
-        #hotbar-hud {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: grid;
-            grid-template-columns: repeat(9, 1fr);
-            gap: 4px;
-            z-index: 10;
-        }
-
-        #hotbar-hud .inventory-slot {
-            width: 50px;
-            height: 50px;
-            background-color: rgba(0, 0, 0, 0.4);
-            border: 2px solid #3c3c3c;
-        }
-
-        #hotbar-hud .inventory-slot.selected-hotbar {
-            border: 3px solid #f39c12;
-            background-color: rgba(0, 0, 0, 0.6);
-        }
-        
-        #item-info-panel {
-            min-height: 50px;
-            background-color: #34495e;
-            padding: 10px;
-            border-radius: 6px;
-            border: 1px solid #2c3e50;
-            box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
-        }
-
-        /* 製作按鈕 */
-        .craft-button {
-            padding: 8px 15px;
-            border-radius: 6px;
-            background-color: #2ecc71;
-            color: white;
-            font-weight: bold;
-            transition: background-color 0.2s;
-        }
-
-        .craft-button:hover {
-            background-color: #27ae60;
-        }
-
-        .craft-button:disabled {
-            background-color: #7f8c8d;
-            cursor: not-allowed;
+        .message-box.visible {
+            opacity: 1;
+            pointer-events: auto;
         }
     </style>
 </head>
-<body>
-    <!-- 遊戲 HUD 元素 -->
-    <div id="crosshair"></div>
-    
-    <!-- 生命值容器 (使用 Tailwind 定位) -->
-    <div class="absolute top-5 left-5 z-[100] flex items-center gap-3">
-        <div id="health-container" class="w-[200px] h-[30px] border-2 border-white rounded-md overflow-hidden flex items-center justify-center bg-black/50">
-            <div id="health-bar"></div>
-            <span id="health-text">50 / 100</span>
+<body class="p-4 sm:p-8 min-h-screen">
+
+    <div id="app" class="flex flex-col items-center">
+        <h1 class="text-3xl font-bold text-gray-800 mb-6 rounded-lg p-2 bg-blue-100 shadow-md">塔防遊戲 (手動波次)</h1>
+
+        <!-- 遊戲狀態顯示區 -->
+        <div class="flex flex-wrap justify-center gap-3 mb-6 w-full max-w-4xl">
+            <div id="money" class="stat-item bg-green-100 text-green-800"><i class="fas fa-coins mr-2"></i>金錢: 0</div>
+            <div id="health" class="stat-item bg-red-100 text-red-800"><i class="fas fa-heart mr-2"></i>生命: 0</div>
+            <div id="wave" class="stat-item bg-yellow-100 text-yellow-800"><i class="fas fa-water mr-2"></i>波次: 0</div>
+            <div id="score" class="stat-item bg-purple-100 text-purple-800"><i class="fas fa-star mr-2"></i>得分: 0</div>
         </div>
-    </div>
-    
-    <div id="time-display">時間: 06:00</div>
-    <div id="durability-display">耐久度: 60 / 60</div>
-    <div id="message-box">點擊畫面以開始遊戲，按 C 鍵打開背包。遊戲時間為 1:60 加速。</div>
 
-    <!-- 遊戲中快捷欄顯示 -->
-    <div id="hotbar-hud" class="hotbar-grid-container">
-        <!-- 9 個格子由 JS 渲染 -->
-    </div>
-
-    <!-- 庫存/合成模態視窗 -->
-    <div id="inventory-modal">
-        <div id="inventory-content" class="w-full max-w-xl">
-            <!-- 物品資訊面板 -->
-            <div id="item-info-panel">
-                <p id="item-name" class="text-lg font-bold text-yellow-300">請點擊一個格子...</p>
-                <p id="item-details" class="text-sm text-gray-300"></p>
-            </div>
+        <!-- 主遊戲區塊 -->
+        <div class="game-container flex flex-col md:flex-row gap-6 w-full max-w-6xl">
             
-            <!-- 主庫存 (3x9 = 27) -->
-            <div class="flex flex-col gap-2">
-                <h3 class="text-sm font-semibold text-gray-200">主庫存 (Main Inventory)</h3>
-                <div id="main-inventory-grid" class="inventory-grid-container"></div>
-            </div>
+            <!-- 畫布區 -->
+            <div class="flex-grow flex justify-center items-center relative">
+                <canvas id="gameCanvas" class="w-full max-w-full aspect-[4/3] rounded-xl"></canvas>
+                
+                <!-- 訊息框 -->
+                <div id="messageBox" class="message-box absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4 rounded-lg shadow-2xl text-center z-50 transition-all duration-300 hidden">
+                    <p id="messageText" class="text-lg font-semibold"></p>
+                    <button id="closeMessage" class="mt-3 px-4 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition duration-150">確定</button>
+                </div>
 
-            <!-- 快捷欄 (1x9 = 9) -->
-            <div class="flex flex-col gap-2">
-                <h3 class="text-sm font-semibold text-gray-200">快捷欄 (Hotbar)</h3>
-                <div id="inventory-hotbar-grid" class="inventory-grid-container"></div>
-            </div>
-            
-            <!-- 簡易合成區 -->
-            <div class="flex flex-col gap-3 p-3 bg-gray-700/50 rounded-lg">
-                <h3 class="text-lg font-bold text-emerald-300">簡易合成 (Crafting)</h3>
-                <div class="flex flex-wrap gap-3 justify-center">
-                    <button class="craft-button" onclick="craftItem(6, {3: 4})" data-name="石磚">4 石頭 → 1 石磚</button>
-                    <button class="craft-button" onclick="craftItem(7, {4: 1})" data-name="木板">1 木頭 → 4 木板</button>
-                    <button class="craft-button" onclick="craftItem(8, {7: 2})" data-name="木棍">2 木板 → 4 木棍</button>
-                    <button class="craft-button" onclick="craftItem(9, {8: 2, 7: 3})" data-name="木鎬">2 木棍 + 3 木板 → 1 木鎬</button>
+                <!-- 遊戲結束/勝利畫面 -->
+                <div id="gameOverScreen" class="hidden absolute inset-0 bg-gray-900 bg-opacity-80 flex flex-col items-center justify-center rounded-xl z-40">
+                    <h2 id="gameOverTitle" class="text-6xl font-extrabold text-white mb-4">遊戲結束</h2>
+                    <p class="text-3xl text-yellow-400 mb-8">最終得分: <span id="finalScore" class="font-bold">0</span></p>
+                    <button id="restartButton" class="px-8 py-4 bg-green-500 text-white text-xl font-bold rounded-full shadow-lg hover:bg-green-600 transition transform hover:scale-105 duration-200">重新開始</button>
                 </div>
             </div>
 
+            <!-- 商店/控制面板 -->
+            <div class="ui-panel p-4 md:w-72 rounded-xl flex-shrink-0">
+                <h2 class="text-2xl font-semibold mb-4 text-gray-700 border-b pb-2"><i class="fas fa-store mr-2"></i>商店 / 控制</h2>
+                
+                <!-- 新增：開始波次按鈕 -->
+                <button id="startWaveButton" class="mt-0 w-full p-3 bg-indigo-600 text-white rounded-lg font-bold shadow-xl hover:bg-indigo-700 transition duration-150 flex items-center justify-center disabled:opacity-50">
+                    <i class="fas fa-play mr-2"></i>開始下一波 (波次 <span id="nextWaveNum">1</span>)
+                </button>
+
+                <!-- 建造模式時顯示的取消按鈕 -->
+                <button id="cancelBuildButton" class="mt-4 w-full p-3 bg-gray-500 text-white rounded-lg font-bold shadow-md hover:bg-gray-600 transition duration-150 flex items-center justify-center hidden">
+                    <i class="fas fa-times mr-2"></i>取消建造
+                </button>
+
+                <div id="towerButtons" class="space-y-4 mt-4">
+                    <!-- 塔 1 按鈕 -->
+                    <button id="buyTower1" class="w-full p-3 bg-blue-500 text-white rounded-lg shadow-md hover:bg-blue-600 transition duration-150 flex justify-between items-center">
+                        <div>
+                            <span class="font-bold">基礎砲塔</span>
+                            <p class="text-xs opacity-80">射速快，範圍小</p>
+                        </div>
+                        <span class="text-sm bg-blue-700 px-3 py-1 rounded-full">￥50</span>
+                    </button>
+
+                    <!-- 塔 2 按鈕 -->
+                    <button id="buyTower2" class="w-full p-3 bg-red-500 text-white rounded-lg shadow-md hover:bg-red-600 transition duration-150 flex justify-between items-center">
+                        <div>
+                            <span class="font-bold">重型加農砲</span>
+                            <p class="text-xs opacity-80">傷害高，射速慢</p>
+                        </div>
+                        <span class="text-sm bg-red-700 px-3 py-1 rounded-full">￥150</span>
+                    </button>
+
+                    <!-- 塔 3 按鈕 -->
+                    <button id="buyTower3" class="w-full p-3 bg-yellow-500 text-white rounded-lg shadow-md hover:bg-yellow-600 transition duration-150 flex justify-between items-center">
+                        <div>
+                            <span class="font-bold">緩速塔</span>
+                            <p class="text-xs opacity-80">減慢敵人速度</p>
+                        </div>
+                        <span class="text-sm bg-yellow-700 px-3 py-1 rounded-full">￥100</span>
+                    </button>
+                </div>
+
+                <h3 class="text-xl font-semibold mt-6 mb-3 text-gray-700 border-b pb-1"><i class="fas fa-chart-bar mr-2"></i>選中的塔</h3>
+                <div id="selectedTowerStats" class="text-sm text-gray-600 space-y-1">
+                    <p>點擊地圖上的塔來查看統計數據和升級選項。</p>
+                </div>
+
+                <button id="upgradeButton" class="mt-4 w-full p-2 bg-green-400 text-white rounded-lg shadow-md hover:bg-green-500 transition duration-150 hidden disabled:opacity-50" disabled>
+                    <i class="fas fa-arrow-up mr-2"></i>升級 (￥<span id="upgradeCost">0</span>)
+                </button>
+                
+            </div>
         </div>
+
+        <!-- 狀態列 (僅顯示給開發者) -->
+        <div id="debugStatus" class="mt-6 p-3 bg-gray-100 rounded-lg text-sm text-gray-600 w-full max-w-6xl">
+            <!-- 偵錯資訊將在這裡顯示 -->
+            <p><strong>除錯狀態:</strong></p>
+            <p id="debugPathLength"></p>
+        </div>
+
     </div>
 
-
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/cannon.js/0.6.2/cannon.min.js"></script>
-
     <script>
-        (function() {
-            // --- 全域變數和遊戲狀態 ---
-            const messageBox = document.getElementById('message-box');
-            const healthBar = document.getElementById('health-bar');
-            const healthText = document.getElementById('health-text');
-            const durabilityDisplay = document.getElementById('durability-display');
-            const timeDisplay = document.getElementById('time-display');
-            
-            const inventoryModal = document.getElementById('inventory-modal');
-            const mainInventoryGrid = document.getElementById('main-inventory-grid');
-            const inventoryHotbarGrid = document.getElementById('inventory-hotbar-grid');
-            const hotbarHUD = document.getElementById('hotbar-hud');
-            const itemNameDisplay = document.getElementById('item-name');
-            const itemDetailsDisplay = document.getElementById('item-details');
-            
-            let scene, camera, renderer, world;
-            let ambientLight, directionalLight;
-            let player, playerBody;
-            let lastTime; 
-            let lastCullTime = 0;
-            const cullingDistance = 50;
-            let isGameOver = false;
-            let isInventoryOpen = false; // 狀態：庫存是否開啟
-            let draggedSlot = null; // 拖曳狀態追蹤
-            
-            // 玩家狀態
-            let playerHealth = 50; // <--- 設置初始生命值為 50
-            const maxHealth = 100;
-            const playerDamage = 10; 
-            let canJump = false; 
-            let fallStartY = null;
-            let isFalling = false;
-            const minFallHeight = 10; 
-            const fallDamageFactor = 2; 
+        // ----------------------------------------------------
+        // --- 核心遊戲設定與常數 ---
+        // ----------------------------------------------------
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
 
-            // 挖掘狀態
-            let isDigging = false;
-            let diggingStartTime = 0;
-            let diggingBlockId = null;
-            let diggingEffect = null;
-            const blockMeshes = new Map();
-            const blockBodies = new Map();
+        // 標準地圖和網格大小 (已從 32 變更為 40，讓遊戲更大)
+        let MAP_WIDTH = 640;
+        let MAP_HEIGHT = 480;
+        const TILE_SIZE = 40; 
 
-            // 生物追蹤
-            const pigMeshes = [];
-            const pigBodies = [];
-            const saplingGrowthTracker = new Map(); 
+        // 遊戲核心數據
+        let currentLevel = 1;
+        let mapPath = []; // 儲存路徑點 [{x, y}, ...]
+        let enemies = [];
+        let towers = [];
+        let bullets = [];
+        let pathTiles = new Set(); // 新增：用於儲存路徑上所有網格座標的集合 (格式: "x,y")
 
-            // 鍵盤狀態
-            const keyboard = {};
-            
-            // --- 庫存與物品定義 ---
-            const BLOCK_DIMENSIONS = 1;
-            const WOODEN_PICKAXE_MAX_DURABILITY = 60;
-            let currentPickaxeDurability = WOODEN_PICKAXE_MAX_DURABILITY; 
-            let selectedHotbarIndex = 0; // 快捷欄 0-8
-
-            // 物品定義 (ItemId 必須與遊戲內方塊/物品名稱對應)
-            const itemDefinitions = {
-                1: { name: "草方塊", maxStack: 64, icon: "🌿", blockType: 'grass' },
-                2: { name: "泥土", maxStack: 64, icon: "🟫", blockType: 'dirt' },
-                3: { name: "石頭", maxStack: 64, icon: "🪨", blockType: 'stone' },
-                4: { name: "木頭", maxStack: 64, icon: "🪵", blockType: 'wood' },
-                5: { name: "樹葉", maxStack: 64, icon: "🍃", blockType: 'leaves' },
-                6: { name: "石磚", maxStack: 64, icon: "🧱", blockType: 'stone_bricks' },
-                7: { name: "木板", maxStack: 64, icon: "🚪", blockType: 'wooden_planks' },
-                8: { name: "木棍", maxStack: 64, icon: "🥢", blockType: 'sticks' },
-                9: { name: "木鎬", maxStack: 1, icon: "⛏️", blockType: 'wooden_pickaxe', tool: true },
-                10: { name: "樹苗", maxStack: 64, icon: "🌱", blockType: 'sapling' },
-                11: { name: "豬肉", maxStack: 64, icon: "🥩", blockType: 'pork', edible: true }
-            };
-
-            // 庫存陣列 (0-26 主庫存, 27-35 快捷欄)
-            let inventoryData = new Array(36).fill(null).map((_, index) => ({ slot: index, itemId: null, stack: 0 }));
-
-            // --- 初始物品設定 (只給予草方塊在快捷欄第一個格子, 第二個格子給豬肉) ---
-            inventoryData[27] = { slot: 27, itemId: 1, stack: 64 }; // 草方塊
-            inventoryData[28] = { slot: 28, itemId: 11, stack: 5 }; // 豬肉 (用於測試)
-            // ---------------------------------------------------
-            
-            // 方塊顏色對應 (用於 3D 渲染)
-            const blockColors = {
-                'grass': 0x2ecc71, 'dirt': 0x8b4513, 'stone': 0x95a5a6, 'wood': 0x7d5e4a,
-                'leaves': 0x27ae60, 'stone_bricks': 0x7f8c8d, 'pig': 0xffa07a, 'empty': 0x70a1d6,
-                'wooden_planks': 0x966F33, 'sticks': 0x8A4B2A, 'sapling': 0x559e31, 'pork': 0xFF69B4,
-                'wooden_pickaxe': 0x9e7354
-            };
-
-            // 方塊挖掘時間 (毫秒)
-            const blockDurations = {
-                'grass': 1000, 'dirt': 1000, 'stone': 2000, 'wood': 5000,
-                'leaves': 500, 'stone_bricks': 2000, 'wooden_planks': 1000,
-                'sticks': 1000, 'sapling': 500
-            };
-
-            // 時間系統
-            let gameTime = 6.0; // 初始時間為早上 6 點
-            
-            // 遊戲時間加速係數: 現實 1 秒 = 遊戲 1 分鐘 (1/60 遊戲小時)
-            const REAL_SECOND_TO_GAME_HOUR_FACTOR = 1 / 60; 
-            
-            // --- 輔助函數：庫存和物品 ---
-
-            /**
-             * 取得當前快捷欄選中的物品物件。
-             * @returns {object} 當前選中的格子物件。
-             */
-            function getSelectedItem() {
-                return inventoryData[27 + selectedHotbarIndex];
+        // 塔的類型、名稱和統計數據 (射程已按比例放大)
+        const TOWER_STATS = {
+            1: { // 基礎砲塔
+                1: { label: "基礎砲塔 I", cost: 50, range: 125, damage: 10, fireRate: 60, color: '#3b82f6', upgrade: 2 }, 
+                2: { label: "基礎砲塔 II", cost: 100, range: 150, damage: 15, fireRate: 50, color: '#2563eb', upgrade: 3 }, 
+                3: { label: "基礎砲塔 III", cost: 200, range: 175, damage: 20, fireRate: 40, color: '#1d4ed8', upgrade: null } 
+            },
+            2: { // 重型加農砲
+                1: { label: "重型加農砲 I", cost: 150, range: 187, damage: 50, fireRate: 120, color: '#ef4444', upgrade: 2 }, 
+                2: { label: "重型加農砲 II", cost: 250, range: 212, damage: 75, fireRate: 110, color: '#dc2626', upgrade: 3 }, 
+                3: { label: "重型加農砲 III", cost: 400, range: 250, damage: 100, fireRate: 100, color: '#b91c1c', upgrade: null } 
+            },
+            3: { // 緩速塔
+                1: { label: "緩速塔 I", cost: 100, range: 100, damage: 0, fireRate: 90, color: '#facc15', upgrade: 2, slow: 0.5, slowDuration: 180 }, 
+                2: { label: "緩速塔 II", cost: 100, range: 125, damage: 0, fireRate: 80, color: '#eab308', upgrade: 3, slow: 0.6, slowDuration: 240 }, 
+                3: { label: "緩速塔 III", cost: 100, range: 150, damage: 0, fireRate: 70, color: '#ca8a04', upgrade: null, slow: 0.7, slowDuration: 300 } 
             }
+        };
 
-            /**
-             * 根據方塊的 Three.js 類型名稱查找對應的 Item ID。
-             * @param {string} blockType - 方塊類型字串 (e.g., 'grass', 'stone')
-             * @returns {number | null} 對應的 Item ID 或 null
-             */
-            function getItemIdByBlockType(blockType) {
-                const entry = Object.entries(itemDefinitions).find(([, def]) => def.blockType === blockType);
-                return entry ? parseInt(entry[0]) : null;
+        // 敵人類型和統計數據 
+        const ENEMY_STATS = {
+            1: { health: 50, speed: 1.25, color: '#a78bfa', reward: 5 }, // 基礎敵人
+            2: { health: 150, speed: 0.875, color: '#10b981', reward: 15 }, // 重裝敵人
+            3: { health: 25, speed: 1.875, color: '#f97316', reward: 2 }, // 快速敵人
+        };
+
+        // 關卡配置 (簡化為單一關卡)
+        const LEVELS = {
+            1: {
+                map: [
+                    // 路徑點的網格座標 (x, y)
+                    { x: 0, y: 7 }, { x: 4, y: 7 }, { x: 4, y: 3 }, { x: 10, y: 3 }, { x: 10, y: 12 }, { x: 5, y: 12 }, { x: 5, y: 17 }, { x: 19, y: 17 }
+                ],
+                lockedAreas: [
+                    // 鎖定區域的座標和成本
+                    { x: 2, y: 3, cost: 75 }, { x: 3, y: 3, cost: 75 }, 
+                    { x: 3, y: 2, cost: 80 }, { x: 5, y: 2, cost: 80 }, 
+                    { x: 1, y: 6, cost: 80 }, { x: 2, y: 6, cost: 80 }, { x: 3, y: 6, cost: 80 }, 
+                    { x: 5, y: 6, cost: 80 }, { x: 5, y: 8, cost: 80 }, { x: 5, y: 9, cost: 80 }, 
+
+                    { x: 9, y: 4, cost: 90 }, { x: 11, y: 4, cost: 90 }, 
+                    { x: 8, y: 6, cost: 100 }, { x: 9, y: 6, cost: 100 }, 
+                    { x: 8, y: 8, cost: 110 }, { x: 9, y: 8, cost: 110 }, 
+                    { x: 8, y: 10, cost: 120 }, { x: 9, y: 10, cost: 120 }, 
+                    
+                    { x: 11, y: 6, cost: 110 }, { x: 11, y: 8, cost: 110 }, { x: 11, y: 10, cost: 120 }, { x: 11, y: 11, cost: 120 }, 
+                    
+                    { x: 7, y: 15, cost: 130 }, { x: 8, y: 15, cost: 130 }, 
+                    { x: 6, y: 13, cost: 140 }, { x: 7, y: 13, cost: 140 }, 
+                    { x: 13, y: 15, cost: 150 }, { x: 14, y: 15, cost: 150 }, { x: 15, y: 15, cost: 150 }, { x: 16, y: 15, cost: 150 }, 
+
+                    { x: 17, y: 10, cost: 125 }, { x: 18, y: 10, cost: 125 }, 
+                    // { x: 14, y: 17, cost: 150 }, // <--- 移除與路徑 (5,17)到(19,17)重疊的鎖定區域
+                    { x: 16, y: 18, cost: 150 }, { x: 18, y: 18, cost: 150 }, 
+                ],
+                // 波次配置: [ [敵人類型, 數量, 間隔幀數], ... ]
+                waves: [
+                    [{ type: 1, count: 5, interval: 60 }],                      // Wave 1: 5 個基礎敵人
+                    [{ type: 1, count: 8, interval: 50 }],                      // Wave 2: 8 個基礎敵人
+                    [{ type: 1, count: 5, interval: 40 }, { type: 3, count: 3, interval: 60 }], // Wave 3: 混合敵人
+                    [{ type: 2, count: 3, interval: 120 }, { type: 1, count: 5, interval: 60 }], // Wave 4: 引入重裝敵人
+                    [{ type: 2, count: 5, interval: 90 }, { type: 3, count: 5, interval: 40 }], // Wave 5: 挑戰波次
+                ],
+                waveDelay: 300, 
             }
+        };
 
-            /**
-             * 將物品添加到庫存中。
-             * @param {number} itemId - 物品ID。
-             * @param {number} count - 數量。
-             */
-            function addItemToInventory(itemId, count) {
-                if (!itemDefinitions[itemId]) return;
 
-                const maxStack = itemDefinitions[itemId].maxStack;
-                let remaining = count;
+        // ----------------------------------------------------
+        // --- 遊戲狀態變數 ---
+        // ----------------------------------------------------
+        let money = 300;
+        let health = 10;
+        let currentLevelIndex = 1;
+        let currentWave = 1;
+        let score = 0;
+        let isGameRunning = false;
+        let isGameOver = false;
+        let selectedTowerType = null; 
+        let selectedTower = null; 
+        let currentWaveSpawnIndex = 0; // 追蹤當前波次中已生成的敵人數量
+        let waveStartTime = 0;
+        let isWaveActive = false; // 標誌當前波次是否正在進行
+        let lastTime = 0;
+        
+        // --- 鎖定區域相關狀態 ---
+        let lockedTiles = []; 
+        let unlockedTiles = {}; // Map of "x,y" -> true for purchased tiles (已解鎖的網格)
 
-                // 嘗試堆疊到現有格子
-                for (let i = 0; i < inventoryData.length && remaining > 0; i++) {
-                    if (inventoryData[i].itemId === itemId && inventoryData[i].stack < maxStack) {
-                        const canAdd = maxStack - inventoryData[i].stack;
-                        const toAdd = Math.min(remaining, canAdd);
-                        inventoryData[i].stack += toAdd;
-                        remaining -= toAdd;
-                    }
-                }
+        // UI 元素
+        const moneyEl = document.getElementById('money');
+        const healthEl = document.getElementById('health');
+        const waveEl = document.getElementById('wave');
+        const scoreEl = document.getElementById('score');
+        const debugPathLengthEl = document.getElementById('debugPathLength');
+        const messageBox = document.getElementById('messageBox');
+        const messageText = document.getElementById('messageText');
+        const gameOverScreen = document.getElementById('gameOverScreen');
+        const finalScoreEl = document.getElementById('finalScore');
+        const gameOverTitleEl = document.getElementById('gameOverTitle');
+        const selectedTowerStatsEl = document.getElementById('selectedTowerStats');
+        const upgradeButton = document.getElementById('upgradeButton');
+        const upgradeCostEl = document.getElementById('upgradeCost');
+        const startWaveButton = document.getElementById('startWaveButton');
+        const nextWaveNumEl = document.getElementById('nextWaveNum');
+        const cancelBuildButton = document.getElementById('cancelBuildButton'); 
 
-                // 嘗試放入空槽
-                for (let i = 0; i < inventoryData.length && remaining > 0; i++) {
-                    if (inventoryData[i].itemId === null) {
-                        const toAdd = Math.min(remaining, maxStack);
-                        inventoryData[i].itemId = itemId;
-                        inventoryData[i].stack = toAdd;
-                        remaining -= toAdd;
-                    }
-                }
 
-                if (remaining > 0) {
-                    showMessage(`庫存已滿，無法取得 ${itemDefinitions[itemId].name} x ${remaining}`);
-                }
-                renderInventoryUI();
-            }
-
-            // --- 庫存 UI 渲染邏輯 ---
-
-            /**
-             * 渲染單一庫存格子。
-             * @param {number} index - 庫存陣列索引。
-             * @param {HTMLElement} container - 容納格子的 DOM 元素。
-             * @param {boolean} isHotbar - 是否為快捷欄。
-             */
-            function renderSlot(index, container, isHotbar) {
-                const item = inventoryData[index];
-                const definition = itemDefinitions[item.itemId];
-
-                const slotEl = document.createElement('div');
-                slotEl.className = 'inventory-slot rounded-md';
-                slotEl.setAttribute('data-slot-index', index);
-                slotEl.setAttribute('draggable', item.itemId !== null);
-
-                let content = '';
-                if (item.itemId !== null) {
-                    content += `<span class="item-icon">${definition.icon}</span>`;
-                    if (item.stack > 1) {
-                        content += `<span class="stack-count">${item.stack}</span>`;
-                    }
-                }
-                slotEl.innerHTML = content;
+        // ----------------------------------------------------
+        // --- 核心遊戲物件類別 ---
+        // ----------------------------------------------------
+        
+        /**
+         * 敵人物件
+         * @param {number} type 敵人類型
+         */
+        class Enemy {
+            constructor(type) {
+                this.type = type;
+                const stats = ENEMY_STATS[type];
+                this.maxHealth = stats.health;
+                this.health = stats.health;
+                this.speed = stats.speed;
+                this.baseSpeed = stats.speed; // 儲存基礎速度
+                this.color = stats.color;
+                this.reward = stats.reward;
+                this.pathIndex = 0; // 當前路徑點的索引
                 
-                // 快捷欄選中狀態
-                if (isHotbar && (index - 27) === selectedHotbarIndex) {
-                    slotEl.classList.add('selected-hotbar');
-                }
-
-                // 僅在模態視窗打開時添加拖曳事件，否則只添加點擊
-                if (isInventoryOpen) {
-                    slotEl.addEventListener('click', () => handleSlotClick(index));
-                    slotEl.addEventListener('dragstart', handleDragStart);
-                    slotEl.addEventListener('dragover', handleDragOver);
-                    slotEl.addEventListener('drop', handleDrop);
-                    slotEl.addEventListener('dragend', handleDragEnd);
-                } else if (isHotbar) {
-                     // 遊戲中快捷欄點擊時，切換選中狀態
-                    slotEl.addEventListener('click', () => {
-                        selectedHotbarIndex = index - 27;
-                        renderInventoryUI();
-                    });
-                }
-                
-                container.appendChild(slotEl);
-            }
-
-            /**
-             * 重新繪製所有庫存和快捷欄 UI。
-             */
-            function renderInventoryUI() {
-                // 1. 渲染主庫存 (0-26)
-                mainInventoryGrid.innerHTML = '';
-                for (let i = 0; i < 27; i++) {
-                    renderSlot(i, mainInventoryGrid, false);
-                }
-
-                // 2. 渲染模態視窗中的快捷欄 (27-35)
-                inventoryHotbarGrid.innerHTML = '';
-                for (let i = 27; i < 36; i++) {
-                    renderSlot(i, inventoryHotbarGrid, true);
-                }
-                
-                // 3. 渲染遊戲中的 HUD 快捷欄 (27-35)
-                hotbarHUD.innerHTML = '';
-                for (let i = 27; i < 36; i++) {
-                    renderSlot(i, hotbarHUD, true);
-                }
-                
-                // 4. 更新工具耐久度顯示
-                updateDurabilityUI();
-            }
-
-            /**
-             * 處理格子點擊事件 (僅在庫存開啟時)。
-             * @param {number} index - 被點擊的格子索引。
-             */
-            function handleSlotClick(index) {
-                // 清除 info panel 的選中狀態，但保留 hotbar 的 selected-hotbar
-                document.querySelectorAll('#main-inventory-grid .inventory-slot, #inventory-hotbar-grid .inventory-slot').forEach(el => el.classList.remove('active'));
-
-                const item = inventoryData[index];
-                const slotEl = document.querySelector(`#inventory-modal [data-slot-index="${index}"]`);
-                
-                if (slotEl) {
-                    slotEl.classList.add('active');
-                }
-
-                if (item.itemId !== null) {
-                    const definition = itemDefinitions[item.itemId];
-                    itemNameDisplay.textContent = `物品: ${definition.name}`;
-                    itemDetailsDisplay.innerHTML = `
-                        堆疊數量: ${item.stack}<br>
-                        最大堆疊: ${definition.maxStack}<br>
-                        庫存索引: ${index} (${index < 27 ? '主庫存' : '快捷欄'})
-                    `;
+                // 確保路徑點存在
+                if (mapPath.length > 0) {
+                    // 敵人從第一個路徑點的中心位置開始
+                    this.x = mapPath[0].x * TILE_SIZE + TILE_SIZE / 2;
+                    this.y = mapPath[0].y * TILE_SIZE + TILE_SIZE / 2;
                 } else {
-                    itemNameDisplay.textContent = `空槽 (索引: ${index})`;
-                    itemDetailsDisplay.textContent = '此槽位目前沒有任何物品。';
-                }
-            }
-
-            // --- 拖放邏輯 ---
-            function handleDragStart(e) {
-                const index = parseInt(e.target.getAttribute('data-slot-index'));
-                if (inventoryData[index].itemId === null) {
-                    e.preventDefault();
-                    return;
-                }
-                draggedSlot = index;
-                e.dataTransfer.setData('text/plain', index);
-                setTimeout(() => e.target.classList.add('dragging'), 0);
-            }
-
-            function handleDragOver(e) {
-                e.preventDefault(); 
-            }
-
-            function handleDrop(e) {
-                e.preventDefault();
-                const targetIndex = parseInt(e.currentTarget.getAttribute('data-slot-index'));
-                const sourceIndex = draggedSlot;
-
-                if (sourceIndex === null || sourceIndex === targetIndex) return;
-
-                // 執行物品交換 (簡單交換邏輯)
-                [inventoryData[sourceIndex], inventoryData[targetIndex]] = 
-                [inventoryData[targetIndex], inventoryData[sourceIndex]];
-
-                // 更新 slot 索引 (雖然在這個應用中 slot 屬性不嚴格需要，但保持資料完整性)
-                inventoryData[sourceIndex].slot = sourceIndex;
-                inventoryData[targetIndex].slot = targetIndex;
-
-                renderInventoryUI();
-                handleSlotClick(targetIndex);
-            }
-
-            function handleDragEnd(e) {
-                e.target.classList.remove('dragging');
-                draggedSlot = null; 
-            }
-            
-            // --- 合成邏輯 ---
-            
-            /**
-             * 嘗試合成物品。
-             * @param {number} resultItemId - 合成後的物品ID。
-             * @param {object} recipe - 所需材料 {itemId: count}。
-             */
-            window.craftItem = function(resultItemId, recipe) {
-                const resultDef = itemDefinitions[resultItemId];
-                if (!resultDef) return;
-
-                // 1. 檢查材料是否足夠
-                let canCraft = true;
-                for (const [requiredItemIdStr, requiredCount] of Object.entries(recipe)) {
-                    const requiredItemId = parseInt(requiredItemIdStr);
-                    let foundCount = 0;
-                    
-                    // 遍歷所有格子計算總數
-                    inventoryData.forEach(item => {
-                        if (item.itemId === requiredItemId) {
-                            foundCount += item.stack;
-                        }
-                    });
-
-                    if (foundCount < requiredCount) {
-                        canCraft = false;
-                        showMessage(`缺少材料: ${itemDefinitions[requiredItemId].name} x ${requiredCount - foundCount}`);
-                        break;
-                    }
+                    // 處理沒有路徑的情況 (不應該發生)
+                    this.x = -100;
+                    this.y = -100;
                 }
 
-                if (canCraft) {
-                    // 2. 消耗材料 (從庫存中移除)
-                    for (const [requiredItemIdStr, requiredCount] of Object.entries(recipe)) {
-                        let toRemove = requiredCount;
-                        const requiredItemId = parseInt(requiredItemIdStr);
-                        
-                        // 從後往前移除 (避免影響快捷欄)
-                        for (let i = inventoryData.length - 1; i >= 0 && toRemove > 0; i--) {
-                            const item = inventoryData[i];
-                            if (item.itemId === requiredItemId) {
-                                const removed = Math.min(toRemove, item.stack);
-                                item.stack -= removed;
-                                toRemove -= removed;
-
-                                if (item.stack <= 0) {
-                                    item.itemId = null;
-                                    item.stack = 0;
-                                }
-                            }
-                        }
-                    }
-
-                    // 3. 產出結果
-                    // 木板和木棍通常一次產出多個
-                    let outputCount = 1;
-                    if (resultItemId === 7) outputCount = 4; // 木板
-                    if (resultItemId === 8) outputCount = 4; // 木棍
-                    
-                    addItemToInventory(resultItemId, outputCount);
-                    showMessage(`成功合成 ${resultDef.name} x ${outputCount}！`);
-                }
+                this.radius = 13; 
+                this.slowTimer = 0; 
+                this.slow = 0;
             }
 
-
-            // --- 遊戲初始化和迴圈 (沿用 NaN 修正後的代碼) ---
-            
-            function init() {
-                // THREE.js 和 CANNON.js 初始化...
-                scene = new THREE.Scene();
-                camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-                renderer = new THREE.WebGLRenderer();
-                renderer.setSize(window.innerWidth, window.innerHeight);
-                document.body.appendChild(renderer.domElement);
-
-                ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
-                scene.add(ambientLight);
-                directionalLight = new THREE.DirectionalLight(0xffffff, 0.5);
-                scene.add(directionalLight);
-
-                world = new CANNON.World();
-                world.gravity.set(0, -9.82, 0);
-                world.broadphase = new CANNON.NaiveBroadphase();
-
-                generateWorld();
-                createPigs();
-
-                // 事件監聽器
-                window.addEventListener('keydown', onKeyDown);
-                window.addEventListener('keyup', (e) => keyboard[e.key] = false);
-                window.addEventListener('resize', onWindowResize);
-                window.addEventListener('mousedown', onMouseDown);
-                window.addEventListener('mouseup', onMouseUp);
-                document.addEventListener('mousemove', onMouseMove);
-                document.addEventListener('pointerlockchange', pointerLockChange, false);
-                
-                // 初始 UI 渲染和玩家創建
-                renderInventoryUI();
-                updateHealthUI(); // 將顯示 50/100
-                updateTimeAndLighting(gameTime); 
-                createPlayer(); 
-                
-                requestAnimationFrame(animate);
-                
-                // 首次嘗試鎖定滑鼠
-                document.body.requestPointerLock().catch(() => {});
-            }
-
-
-            // --- 遊戲事件處理 (部分更新) ---
-            
-            function onKeyDown(e) {
-                keyboard[e.key] = true;
-                
-                // C 鍵：切換庫存/模態視窗
-                if (e.key.toLowerCase() === 'c') {
-                    toggleInventory();
+            // 移動邏輯
+            move() {
+                if (this.pathIndex + 1 >= mapPath.length) {
+                    // 敵人到達終點
+                    health -= 1;
+                    updateUI();
+                    return true; // 表示已到達終點
                 }
 
-                // 數字鍵：切換快捷欄 (1 到 9)
-                let keyIndex = parseInt(e.key) - 1;
-                if (!isNaN(keyIndex) && keyIndex >= 0 && keyIndex <= 8) {
-                    selectedHotbarIndex = keyIndex;
-                    renderInventoryUI(); // 更新選中狀態
-                    
-                    const item = getSelectedItem();
-                    const name = item.itemId ? itemDefinitions[item.itemId].name : '空';
-                    showMessage(`已選擇快捷欄 ${keyIndex + 1}: ${name}`);
-                }
-            }
-            
-            /**
-             * 切換庫存介面顯示狀態。
-             */
-            function toggleInventory() {
-                isInventoryOpen = !isInventoryOpen;
-                inventoryModal.style.display = isInventoryOpen ? 'flex' : 'none';
-                
-                if (isInventoryOpen) {
-                    document.exitPointerLock();
-                    renderInventoryUI(); // 確保庫存開啟時，UI 帶有拖曳功能
-                    showMessage("庫存開啟。點擊 C 鍵或畫面外區域關閉。");
+                const target = mapPath[this.pathIndex + 1];
+                const targetX = target.x * TILE_SIZE + TILE_SIZE / 2;
+                const targetY = target.y * TILE_SIZE + TILE_SIZE / 2;
+
+                const dx = targetX - this.x;
+                const dy = targetY - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                // 計算當前速度 (考慮緩速效果)
+                const currentSpeed = (this.slowTimer > 0) ? this.baseSpeed * (1 - this.slow) : this.baseSpeed;
+
+                if (dist > currentSpeed) { 
+                    this.x += (dx / dist) * currentSpeed;
+                    this.y += (dy / dist) * currentSpeed;
                 } else {
-                    document.body.requestPointerLock().catch(() => {});
-                    renderInventoryUI(); // 確保庫存關閉時，UI 移除拖曳功能
+                    // 到達當前目標點，移動到下一個路徑點
+                    this.x = targetX;
+                    this.y = targetY;
+                    this.pathIndex++;
                 }
-            }
 
-
-            function onMouseDown(event) {
-                if (isGameOver || isInventoryOpen) return;
-                
-                if (document.pointerLockElement === document.body) {
-                    const selectedItem = getSelectedItem();
-                    const selectedItemId = selectedItem.itemId;
-
-                    const raycaster = new THREE.Raycaster();
-                    const origin = new THREE.Vector3();
-                    camera.getWorldPosition(origin);
-                    const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                    raycaster.set(origin, direction);
-
-                    const maxInteractionDistance = 5; 
-                    const intersects = raycaster.intersectObjects(scene.children, true).filter(i => i.distance < maxInteractionDistance);
-
-                    if (intersects.length > 0) {
-                        const firstIntersect = intersects[0];
-                        const rootObject = getRootObject(firstIntersect.object);
-                        
-                        if (event.button === 0) { // 左鍵挖掘或攻擊
-                            
-                            if (rootObject.userData.isBlock) {
-                                // 挖掘方塊邏輯
-                                const blockType = rootObject.userData.type;
-                                const isStone = blockType === 'stone';
-                                const isPickaxe = selectedItemId === 9; // 木鎬 ID
-                                
-                                // 檢查工具耐久度
-                                if (isStone && isPickaxe && currentPickaxeDurability <= 0) {
-                                     showMessage("你的木鎬已損壞，無法挖掘石頭。");
-                                     return;
-                                }
-
-                                // 開始挖掘
-                                removeDiggingEffect();
-                                isDigging = true;
-                                diggingStartTime = performance.now();
-                                diggingBlockId = rootObject.userData.blockId;
-
-                                diggingEffect = new THREE.BoxHelper(rootObject, 0x00ff00);
-                                scene.add(diggingEffect);
-                                
-                            } else if (rootObject.userData.type === 'pig') {
-                                // 攻擊豬隻邏輯 (保持不變)
-                                const pigIndex = pigMeshes.findIndex(mesh => mesh === rootObject);
-                                if (pigIndex !== -1) {
-                                    const pigBody = pigBodies[pigIndex];
-                                    pigBody.userData.health -= playerDamage;
-                                    showMessage(`你攻擊了一頭豬！ (剩餘生命值: ${pigBody.userData.health})`);
-                                    if (pigBody.userData.health <= 0) {
-                                        removePig(pigIndex);
-                                    }
-                                }
-                            }
-                        } else if (event.button === 2) { // 右鍵建造或吃東西
-                            
-                            if (!selectedItemId) {
-                                showMessage("你手上沒有東西！");
-                                return;
-                            }
-
-                            const selectedDef = itemDefinitions[selectedItemId];
-
-                            // 1. 吃東西邏輯
-                            if (selectedDef.edible) {
-                                const healAmount = 20;
-
-                                if (selectedItem.stack > 0) {
-                                    if (playerHealth < maxHealth) {
-                                        // 消耗物品
-                                        selectedItem.stack--;
-                                        if (selectedItem.stack === 0) selectedItem.itemId = null;
-                                        
-                                        // 恢復生命值
-                                        playerHealth = Math.min(maxHealth, playerHealth + healAmount);
-                                        updateHealthUI();
-                                        renderInventoryUI();
-                                        showMessage(`你吃了 ${selectedDef.name}，恢復了 ${healAmount} 點生命值！`);
-                                    } else {
-                                        // 生命值已滿
-                                        showMessage("你的生命值已滿 (100/100)，無法食用。");
-                                    }
-                                } else {
-                                    showMessage("你的庫存裡沒有這個物品了！");
-                                }
-                                return; // 關鍵：處理食物後返回，避免執行放置方塊邏輯
-                            }
-
-                            // 2. 放置方塊邏輯
-                            if (selectedDef.tool) { // 木鎬無法放置
-                                showMessage(`${selectedDef.name} 無法放置。`);
-                                return;
-                            }
-                            
-                            const blockTypeToPlace = selectedDef.blockType;
-                            
-                            if (selectedItem.stack > 0) {
-                                const newBlockPos = firstIntersect.point.clone().add(firstIntersect.face.normal.clone().multiplyScalar(BLOCK_DIMENSIONS / 2));
-                                
-                                const placeX = Math.round(newBlockPos.x);
-                                const placeY = Math.round(newBlockPos.y);
-                                const placeZ = Math.round(newBlockPos.z);
-                                
-                                // 簡易檢查放置位置是否與玩家重疊
-                                if (
-                                    placeX === Math.round(player.position.x) && 
-                                    placeZ === Math.round(player.position.z) && 
-                                    (placeY === Math.round(player.position.y) || placeY === Math.round(player.position.y + 1)) 
-                                ) {
-                                    showMessage("你不能將方塊放置在你的身體裡！");
-                                    return;
-                                }
-
-                                addBlock(placeX, placeY, placeZ, blockTypeToPlace);
-                                selectedItem.stack--;
-                                if (selectedItem.stack === 0) selectedItem.itemId = null;
-                                
-                                renderInventoryUI();
-                                showMessage(`你放置了一個${selectedDef.name}！`);
-                            } else {
-                                showMessage("你的庫存裡沒有這個方塊了！");
-                            }
-                        }
-                    }
-                } else {
-                    // 如果滑鼠沒有鎖定 (即庫存已關閉)，點擊時嘗試鎖定
-                    if (!isInventoryOpen) {
-                         document.body.requestPointerLock().catch(() => {});
+                if (this.slowTimer > 0) {
+                    this.slowTimer--;
+                    if (this.slowTimer === 0) {
+                        this.slow = 0; // 移除緩速效果
                     }
                 }
+
+                return false; // 表示未到達終點
             }
 
-            function onMouseUp(event) {
-                // 如果放開滑鼠左鍵，停止挖掘並移除效果
-                if (event.button === 0 && !isInventoryOpen) {
-                    isDigging = false;
-                    diggingBlockId = null;
-                    removeDiggingEffect();
-                    showMessage('');
-                }
-            }
-            
-            function onMouseMove(event) {
-                 // 只有在庫存關閉時才允許視角移動
-                if (document.pointerLockElement === document.body && !isInventoryOpen) {
-                    const movementX = event.movementX || event.mozMovementX || 0;
-                    const movementY = event.movementY || event.mozMovementY || 0;
+            // 繪製敵人
+            draw() {
+                // 敵人本體
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.strokeStyle = '#333';
+                ctx.stroke();
 
-                    const euler = new THREE.Euler(0, 0, 0, 'YXZ');
-                    euler.setFromQuaternion(camera.quaternion);
+                // 生命條 (在敵人上方)
+                const barWidth = 25; 
+                const barHeight = 5; 
+                const x = this.x - barWidth / 2;
+                const y = this.y - this.radius - barHeight - 2;
 
-                    euler.y -= movementX * 0.002;
-                    euler.x -= movementY * 0.002;
+                // 背景
+                ctx.fillStyle = '#666';
+                ctx.fillRect(x, y, barWidth, barHeight);
 
-                    euler.x = Math.max(-Math.PI / 2, Math.min(Math.PI / 2, euler.x));
+                // 當前生命值
+                const healthRatio = this.health / this.maxHealth;
+                ctx.fillStyle = healthRatio > 0.5 ? '#10b981' : (healthRatio > 0.2 ? '#f97316' : '#ef4444');
+                ctx.fillRect(x, y, barWidth * healthRatio, barHeight);
 
-                    camera.quaternion.setFromEuler(euler);
-                }
-            }
-            
-            function updatePlayerMovement() {
-                const speed = 5;
-                const velocity = new CANNON.Vec3(0, playerBody.velocity.y, 0); 
-                
-                // 只有在庫存關閉時才允許移動
-                if (isInventoryOpen) {
-                    playerBody.velocity.x = 0;
-                    playerBody.velocity.z = 0;
-                    return;
-                }
-
-                const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion);
-                const right = new THREE.Vector3(1, 0, 0).applyQuaternion(camera.quaternion);
-
-                let moveX = 0;
-                let moveZ = 0;
-
-                if (keyboard['w']) { moveX += forward.x; moveZ += forward.z; }
-                if (keyboard['s']) { moveX -= forward.x; moveZ -= forward.z; }
-                if (keyboard['a']) { moveX -= right.x; moveZ -= right.z; }
-                if (keyboard['d']) { moveX += right.x; moveZ += right.z; }
-
-                const magnitude = Math.sqrt(moveX * moveX + moveZ * moveZ);
-                if (magnitude > 0) {
-                    moveX /= magnitude;
-                    moveZ /= magnitude;
-                }
-
-                playerBody.velocity.x = moveX * speed;
-                playerBody.velocity.z = moveZ * speed;
-
-                if (keyboard[' '] && canJump) {
-                    const jumpVelocity = 6;
-                    playerBody.velocity.y = jumpVelocity;
-                    canJump = false; 
+                // 緩速效果指示
+                if (this.slowTimer > 0) {
+                    ctx.fillStyle = 'rgba(60, 60, 255, 0.5)'; // 藍色半透明
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.radius + 3, 0, Math.PI * 2);
+                    ctx.fill();
                 }
             }
 
+            // 應用緩速效果
+            applySlow(slowFactor, duration) {
+                // 只有當新的緩速效果更強時才更新
+                if (!this.slow || slowFactor > this.slow) {
+                    this.slow = slowFactor;
+                    this.slowDuration = duration;
+                    this.slowTimer = duration;
+                }
+            }
 
-            function animate(time) {
-                if (isGameOver) return;
+            // 造成傷害
+            takeDamage(damage) {
+                this.health -= damage;
+            }
+        }
 
-                requestAnimationFrame(animate);
-                
-                let dt = (time - (lastTime || time)) / 1000;
-                const maxDt = 1 / 10; 
-                const safeDt = Math.min(dt, maxDt);
-                lastTime = time; 
-                
-                // --- 遊戲邏輯更新 ---
-                if (!isInventoryOpen) {
-                    world.step(1/60, safeDt, 3);
-                    
-                    // 根據新的時間加速係數更新遊戲時間: 1 秒 (safeDt) = 1/60 遊戲小時
-                    gameTime = (gameTime + safeDt * REAL_SECOND_TO_GAME_HOUR_FACTOR) % 24; 
-                    updateTimeAndLighting(gameTime);
 
-                    updatePlayerMovement();
-                    updatePigs(time);
-                    
-                    player.position.copy(playerBody.position);
+        /**
+         * 塔物件
+         * @param {number} type 塔的類型
+         * @param {number} x 網格 x 座標
+         * @param {number} y 網格 y 座標
+         */
+        class Tower {
+            constructor(type, gridX, gridY) {
+                this.type = type;
+                this.level = 1;
+                this.gridX = gridX;
+                this.gridY = gridY;
+                this.x = gridX * TILE_SIZE + TILE_SIZE / 2;
+                this.y = gridY * TILE_SIZE + TILE_SIZE / 2;
+                this.frameCounter = 0; 
+                this.target = null; 
+                this.updateStats(); 
+            }
 
-                    // 檢查挖掘進度 (只有在非庫存狀態下才更新)
-                    checkDiggingProgress(time);
-                    checkSaplingGrowth(time);
-                    checkFallDamage();
-                    
-                    if (time - lastCullTime > 5000) {
-                        cullDistantObjects();
-                        lastCullTime = time;
+            // 更新屬性 (用於初始化和升級)
+            updateStats() {
+                const stats = TOWER_STATS[this.type][this.level];
+                this.label = stats.label;
+                this.range = stats.range;
+                this.damage = stats.damage;
+                this.fireRate = stats.fireRate; 
+                this.color = stats.color;
+                this.upgradeCost = TOWER_STATS[this.type][stats.upgrade]?.cost || 0;
+                this.slow = stats.slow || 0; 
+                this.slowDuration = stats.slowDuration || 0; 
+            }
+
+            // 尋找目標
+            findTarget() {
+                // 如果當前目標不存在或超出射程，則尋找新目標
+                if (this.target && this.target.health > 0 && distance(this.x, this.y, this.target.x, this.target.y) <= this.range) {
+                    return; 
+                }
+
+                // 尋找血量最高的敵人作為目標 (或者最靠近終點的敵人)
+                this.target = enemies.filter(enemy => 
+                    enemy.health > 0 && distance(this.x, this.y, enemy.x, enemy.y) <= this.range
+                ).reduce((bestTarget, currentEnemy) => {
+                    // 優先攻擊最靠近終點 (pathIndex 最大) 的敵人
+                    if (!bestTarget || currentEnemy.pathIndex > bestTarget.pathIndex || (currentEnemy.pathIndex === bestTarget.pathIndex && currentEnemy.health > bestTarget.health)) {
+                        return currentEnemy;
                     }
-                } else {
-                    // 庫存開啟時，仍須檢查耐久度，但遊戲不動
-                    updateDurabilityUI();
-                }
-                
-                renderer.render(scene, camera);
-            }
-            
-            // --- 挖掘邏輯 ---
-            function checkDiggingProgress(time) {
-                if (isDigging && diggingBlockId) {
-                    const selectedItem = getSelectedItem();
-                    const selectedItemId = selectedItem.itemId;
-                    
-                    // 檢查目標方塊是否還存在 (防止挖掘目標消失後進度條不消失)
-                    const blockMesh = blockMeshes.get(diggingBlockId);
-                    if (!blockMesh) {
-                         isDigging = false;
-                         diggingBlockId = null;
-                         removeDiggingEffect();
-                         showMessage('挖掘已中斷。');
-                         return;
-                    }
-                    
-                    const blockType = blockMesh.userData.type;
-                    let duration = blockDurations[blockType] || 2000;
-
-                    // 加速挖掘：木鎬(9)挖石頭(3)
-                    const isPickaxe = selectedItemId === 9; 
-                    const isStone = blockType === 'stone';
-                    
-                    if (isPickaxe && isStone) {
-                        duration /= 1.5;
-                    }
-
-                    const elapsedTime = time - diggingStartTime;
-                    const progress = Math.min(1, elapsedTime / duration);
-                    const progressPercentage = Math.round(progress * 100);
-
-                    // 更新挖掘效果
-                    const color = new THREE.Color(0x00ff00).lerp(new THREE.Color(0xff0000), progress);
-                    if (!diggingEffect) {
-                        diggingEffect = new THREE.BoxHelper(blockMesh, 0x00ff00);
-                        scene.add(diggingEffect);
-                    }
-                    diggingEffect.material.color.copy(color);
-
-                    showMessage(`正在挖掘 ${blockType} 方塊... (${progressPercentage}%)`);
-
-                    if (elapsedTime >= duration) {
-                        // 挖掘完成
-                        const minedItemId = getItemIdByBlockType(blockType);
-
-                        // --- 耐久度扣除邏輯 ---
-                        if (isPickaxe && isStone && selectedItem.stack > 0) {
-                            currentPickaxeDurability--;
-                            
-                            if (currentPickaxeDurability <= 0) {
-                                selectedItem.stack--; // 消耗一個工具
-                                
-                                if (selectedItem.stack > 0) {
-                                    currentPickaxeDurability = WOODEN_PICKAXE_MAX_DURABILITY;
-                                    showMessage("你的木鎬壞了！幸好你還有備用的。");
-                                } else {
-                                    selectedItem.itemId = null; // 該槽位清空
-                                    currentPickaxeDurability = 0;
-                                    showMessage("你的木鎬徹底壞了，必須再合成一個！");
-                                }
-                            }
-                        }
-                        
-                        // 處理樹葉掉落樹苗
-                        let dropCount = 1;
-                        if (blockType === 'leaves' && Math.random() < 0.3) {
-                            addItemToInventory(10, 1); // 掉落樹苗 ID 10
-                            dropCount = 0; // 不再掉落樹葉方塊本身
-                        }
-                        
-                        // 增加物品到庫存
-                        if (minedItemId && dropCount > 0) {
-                             addItemToInventory(minedItemId, dropCount);
-                             showMessage(`你挖掘了一個${itemDefinitions[minedItemId].name}！`);
-                        }
-                        
-                        removeBlock(diggingBlockId);
-                        removeDiggingEffect(); 
-                        isDigging = false;
-                        diggingBlockId = null;
-                        renderInventoryUI(); // 更新耐久度
-                    }
-                }
-            }
-            
-            function checkFallDamage() {
-                // 沿用舊的墜落傷害檢查邏輯
-                const currentY = playerBody.position.y;
-                const velocityY = playerBody.velocity.y;
-                const tolerance = 0.1; 
-
-                if (velocityY < -tolerance && !isFalling) {
-                    isFalling = true;
-                    fallStartY = currentY;
-                } 
-                
-                // 地面檢查 (Raycasting)
-                const rayStart = playerBody.position;
-                const rayEnd = new CANNON.Vec3(rayStart.x, rayStart.y - 1.0, rayStart.z); 
-                const result = new CANNON.RaycastResult();
-                world.raycastClosest(rayStart, rayEnd, { skip: [playerBody] }, result);
-                canJump = result.hasHit;
-                
-                if (isFalling && canJump) {
-                    const fallDistance = fallStartY - currentY;
-                    
-                    if (fallDistance >= minFallHeight) {
-                        const damage = Math.round((fallDistance - minFallHeight) * fallDamageFactor);
-
-                        if (damage > 0) {
-                            takeDamage(damage);
-                            showMessage(`你從 ${fallDistance.toFixed(1)} 格高處摔落，受到了 ${damage} 點傷害！`);
-                            if (playerHealth <= 0) {
-                                gameOver();
-                            }
-                        }
-                    } 
-                    
-                    isFalling = false;
-                    fallStartY = null;
-                }
-            }
-            
-            // --- 雜項 UI/遊戲輔助函數 (更新 updateHealthUI) ---
-
-            /**
-             * 讓玩家受到傷害。
-             * @param {number} damageAmount - 傷害量。
-             */
-            function takeDamage(damageAmount) {
-                playerHealth = Math.max(0, playerHealth - damageAmount);
-                updateHealthUI();
-                if (playerHealth === 0) {
-                    gameOver();
-                }
+                    return bestTarget;
+                }, null);
             }
 
-            function updateDurabilityUI() {
-                const selectedItem = getSelectedItem();
-                const isPickaxeSelected = selectedItem.itemId === 9; // 木鎬 ID
+            // 射擊邏輯
+            shoot() {
+                this.frameCounter++;
+                this.findTarget();
 
-                if (isPickaxeSelected && selectedItem.stack > 0) {
-                    durabilityDisplay.style.display = 'block';
-                    durabilityDisplay.textContent = `木鎬耐久度: ${currentPickaxeDurability} / ${WOODEN_PICKAXE_MAX_DURABILITY}`;
-                    
-                    if (currentPickaxeDurability < 10) {
-                        durabilityDisplay.style.backgroundColor = 'rgba(231, 76, 60, 0.8)';
-                    } else if (currentPickaxeDurability < 30) {
-                        durabilityDisplay.style.backgroundColor = 'rgba(241, 196, 15, 0.8)';
+                if (this.target && this.frameCounter >= this.fireRate) {
+                    this.frameCounter = 0;
+
+                    if (this.type === 3) {
+                        // 緩速塔 - 應用緩速效果
+                        this.target.applySlow(this.slow, this.slowDuration);
+                        // 可以發射一個視覺子彈，但傷害為 0
+                        bullets.push(new Bullet(this.x, this.y, this.target, 0, this.color));
                     } else {
-                        durabilityDisplay.style.backgroundColor = 'rgba(0, 0, 0, 0.6)';
+                        // 攻擊塔 - 發射子彈
+                        bullets.push(new Bullet(this.x, this.y, this.target, this.damage, this.color));
+                    }
+                }
+            }
+
+            // 繪製塔
+            draw() {
+                // 塔的基座
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.rect(this.x - TILE_SIZE / 4, this.y - TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
+                ctx.fill();
+                ctx.strokeStyle = '#000';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+
+                // 繪製等級標記
+                ctx.fillStyle = 'white';
+                ctx.font = '12px Arial'; 
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.level, this.x, this.y);
+
+                // 如果被選中，繪製射程範圍
+                if (selectedTower === this) {
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.7)';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.2)';
+                    ctx.beginPath();
+                    ctx.arc(this.x, this.y, this.range, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+                }
+            }
+
+            // 升級邏輯
+            upgrade() {
+                const nextLevel = this.level + 1;
+                const nextStats = TOWER_STATS[this.type][nextLevel];
+
+                if (nextStats) {
+                    if (money >= this.upgradeCost) {
+                        money -= this.upgradeCost;
+                        this.level = nextLevel;
+                        this.updateStats();
+                        updateTowerStats(this);
+                        updateUI();
+                        showMessageBox(`${this.label} 升級成功！`, 'bg-green-50 text-green-800');
+                    } else {
+                        showMessageBox('金錢不足以升級！', 'bg-red-50 text-red-800');
                     }
                 } else {
-                    durabilityDisplay.style.display = 'none';
+                    showMessageBox('該塔已達到最高等級！', 'bg-blue-50 text-blue-800');
+                }
+            }
+        }
+
+
+        /**
+         * 子彈物件
+         */
+        class Bullet {
+            constructor(x, y, target, damage, color) {
+                this.x = x;
+                this.y = y;
+                this.target = target;
+                this.damage = damage;
+                this.color = color;
+                this.speed = 10; 
+                this.radius = 4; 
+            }
+
+            // 移動邏輯
+            move() {
+                // 如果目標不存在、已死亡或不再是敵人列表的一部分，則子彈消失
+                const targetIsGone = !this.target || this.target.health <= 0 || !enemies.includes(this.target);
+                if (targetIsGone) {
+                    return true; 
+                }
+
+                const dx = this.target.x - this.x;
+                const dy = this.target.y - this.y;
+                const dist = Math.sqrt(dx * dx + dy * dy);
+
+                if (dist < this.speed) {
+                    // 擊中目標 (如果目標仍存在且健康)
+                    if (this.damage > 0) {
+                        this.target.takeDamage(this.damage);
+                    }
+                    return true; // 子彈消失
+                } else {
+                    this.x += (dx / dist) * this.speed;
+                    this.y += (dy / dist) * this.speed;
+                    return false; // 子彈繼續移動
                 }
             }
 
-            function updateTimeAndLighting(time) {
-                 const dayColor = new THREE.Color(0x70a1d6);
-                 const nightColor = new THREE.Color(0x1a1a33);
-                 
-                 let skyColor;
-                 if (time >= 6 && time < 18) { skyColor = dayColor; } 
-                 else if (time >= 18 && time < 19) { const factor = time - 18; skyColor = dayColor.clone().lerp(nightColor, factor); } 
-                 else if (time >= 5 && time < 6) { const factor = 6 - time; skyColor = nightColor.clone().lerp(dayColor, 1 - factor); } 
-                 else { skyColor = nightColor; }
-
-                 scene.background = skyColor;
-
-                 let ambientIntensity;
-                 if (time >= 6 && time < 18) { ambientIntensity = 0.8; } 
-                 else if (time >= 18 && time < 19) { ambientIntensity = THREE.MathUtils.lerp(0.8, 0.2, time - 18); } 
-                 else if (time >= 5 && time < 6) { ambientIntensity = THREE.MathUtils.lerp(0.2, 0.8, time - 5); } 
-                 else { ambientIntensity = 0.2; }
-                 ambientLight.intensity = ambientIntensity;
-
-                 let sunMoonIntensity = ambientIntensity * 1.2; 
-                 if (time > 18 || time < 6) { sunMoonIntensity *= 0.5; }
-                 directionalLight.intensity = sunMoonIntensity;
-                 
-                 const angle = (time / 24) * Math.PI * 2; 
-                 const sunX = Math.sin(angle) * 20;
-                 const sunY = Math.cos(angle) * 20;
-                 directionalLight.position.set(sunX, sunY, 0);
-                 directionalLight.lookAt(0, 0, 0);
-                 
-                 const hours = Math.floor(time) % 24;
-                 const minutes = Math.floor((time - hours) * 60);
-                 const displayHours = isNaN(hours) ? '06' : String(hours).padStart(2, '0');
-                 const displayMinutes = isNaN(minutes) ? '00' : String(minutes).padStart(2, '0');
-
-                 timeDisplay.textContent = `時間: ${displayHours}:${displayMinutes}`;
+            // 繪製子彈
+            draw() {
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.radius, 0, Math.PI * 2);
+                ctx.fill();
             }
+        }
 
-            function updateHealthUI() {
-                playerHealth = Math.max(0, Math.min(maxHealth, playerHealth));
-                healthBar.style.width = `${(playerHealth / maxHealth) * 100}%`;
-                healthText.textContent = `${playerHealth} / ${maxHealth}`;
-            }
+        // ----------------------------------------------------
+        // --- 遊戲邏輯函數 ---
+        // ----------------------------------------------------
 
-            function showMessage(text) {
-                messageBox.textContent = text;
-            }
-            
-            // ... (其他未變動的遊戲邏輯函數)
-            
-            function generateWorld() {
-                const groundMaterial = new CANNON.Material();
-                const groundBody = new CANNON.Body({
-                    mass: 0,
-                    shape: new CANNON.Plane(),
-                    material: groundMaterial
-                });
-                groundBody.quaternion.setFromAxisAngle(new CANNON.Vec3(1, 0, 0), -Math.PI / 2);
-                world.addBody(groundBody);
+        // 輔助函數：計算兩點間距離
+        function distance(x1, y1, x2, y2) {
+            return Math.sqrt(Math.pow(x2 - x1, 2) + Math.pow(y2 - y1, 2));
+        }
+        
+        // 輔助函數：檢查網格座標是否為初始鎖定的區域
+        function getLockedTile(gridX, gridY) {
+            return lockedTiles.find(tile => tile.x === gridX && tile.y === gridY);
+        }
 
-                for (let x = -15; x <= 15; x++) {
-                    for (let z = -15; z <= 15; z++) {
-                        const y = Math.floor(Math.random() * 2) - 1;
-                        addBlock(x, y, z, 'grass');
-                        addBlock(x, y - 1, z, 'dirt');
-                        addBlock(x, y - 2, z, 'stone');
+        /**
+         * 預先計算出路徑上的所有網格座標，存入 pathTiles 集合中。
+         */
+        function calculatePathTiles() {
+            pathTiles.clear();
+            for (let i = 0; i < mapPath.length - 1; i++) {
+                const p1 = mapPath[i];
+                const p2 = mapPath[i + 1];
+
+                if (p1.y === p2.y) {
+                    // 水平段
+                    const minX = Math.min(p1.x, p2.x);
+                    const maxX = Math.max(p1.x, p2.x);
+                    for (let x = minX; x <= maxX; x++) {
+                        pathTiles.add(`${x},${p1.y}`);
+                    }
+                } else if (p1.x === p2.x) {
+                    // 垂直段
+                    const minY = Math.min(p1.y, p2.y);
+                    const maxY = Math.max(p1.y, p2.y);
+                    for (let y = minY; y <= maxY; y++) {
+                        pathTiles.add(`${p1.x},${y}`);
                     }
                 }
-                
-                const numTrees = 5;
-                for (let i = 0; i < numTrees; i++) {
-                    const x = (Math.random() - 0.5) * 20;
-                    const z = (Math.random() - 0.5) * 20;
-                    createTree(Math.round(x), 0, Math.round(z));
+            }
+            // console.log("計算出的路徑網格數量:", pathTiles.size);
+        }
+
+
+        // 載入關卡設定
+        function loadLevel(levelIndex) {
+            const level = LEVELS[levelIndex];
+            if (!level) {
+                console.error(`找不到關卡 ${levelIndex} 的數據`);
+                return;
+            }
+
+            // 計算地圖大小: 假設路徑點的最大 x 和 y 決定了地圖大小
+            const maxX = level.map.reduce((max, p) => Math.max(max, p.x), 0);
+            const maxY = level.map.reduce((max, p) => Math.max(max, p.y), 0);
+
+            // 設置地圖寬度和高度 (確保有足夠空間，至少 1 個網格的邊界)
+            const gridCols = maxX + 2;
+            const gridRows = maxY + 2;
+
+            MAP_WIDTH = gridCols * TILE_SIZE;
+            MAP_HEIGHT = gridRows * TILE_SIZE;
+
+            canvas.width = MAP_WIDTH;
+            canvas.height = MAP_HEIGHT;
+
+            mapPath = level.map;
+            currentLevelIndex = levelIndex;
+
+            // 1. 預先計算路徑網格 (修正路徑檢查問題)
+            calculatePathTiles(); 
+
+            // 重置遊戲狀態
+            enemies = [];
+            towers = [];
+            bullets = [];
+            currentWave = 1;
+            money = 300;
+            health = 10;
+            score = 0;
+            isGameOver = false;
+            isGameRunning = true;
+            isWaveActive = false; 
+            selectedTowerType = null;
+            selectedTower = null;
+            
+            // --- 鎖定區域相關重置 ---
+            // 2. 篩選 lockedAreas，確保它們不在路徑上
+            lockedTiles = level.lockedAreas.filter(tile => !pathTiles.has(`${tile.x},${tile.y}`)) || [];
+            unlockedTiles = {}; 
+
+
+            // 確保遊戲結束畫面是隱藏的
+            gameOverScreen.classList.add('hidden');
+            document.getElementById('buyTower1').disabled = false;
+            document.getElementById('buyTower2').disabled = false;
+            document.getElementById('buyTower3').disabled = false;
+            upgradeButton.classList.add('hidden');
+            selectedTowerStatsEl.innerHTML = '<p>點擊地圖上的塔來查看統計數據和升級選項。</p>';
+            cancelBuildButton.classList.add('hidden'); 
+
+
+            updateUI();
+            
+            console.log(`關卡 ${levelIndex} 載入成功. 地圖尺寸: ${MAP_WIDTH}x${MAP_HEIGHT}`);
+            debugPathLengthEl.textContent = `路徑點數量: ${mapPath.length} | 網格: ${gridCols}x${gridRows} | 實際路徑網格: ${pathTiles.size}`;
+
+            // 啟動遊戲循環
+            if (!lastTime) {
+                requestAnimationFrame(gameLoop);
+            }
+            
+            // 首次載入時給予解鎖提示
+            showMessageBox('歡迎！點擊地圖上的深色「鎖定」區域即可花費金錢解鎖放置砲塔的位置！', 'bg-blue-50 text-blue-800');
+        }
+
+        // 檢查給定的網格座標是否為有效的塔放置點 (非路徑、沒有塔、非鎖定未解鎖)
+        function isTileAvailable(gridX, gridY) {
+            // 1. 檢查是否在路徑上 (使用預先計算的集合，確保所有路徑上的網格都被擋住)
+            if (pathTiles.has(`${gridX},${gridY}`)) {
+                return false; // 是路徑 (不能放置塔)
+            }
+
+            // 2. 檢查是否已有塔
+            for (const t of towers) {
+                if (t.gridX === gridX && t.gridY === gridY) {
+                    return false; // 已有塔 (不能放置塔)
                 }
             }
 
-            function createTree(x, y, z) {
-                const trunkHeight = 3 + Math.floor(Math.random() * 2);
-                for (let i = 0; i < trunkHeight; i++) {
-                    addBlock(x, y + i, z, 'wood');
-                }
+            // 3. 檢查是否超出地圖邊界
+            const gridCols = MAP_WIDTH / TILE_SIZE;
+            const gridRows = MAP_HEIGHT / TILE_SIZE;
 
-                const leavesHeight = trunkHeight + 1;
-                for (let i = -1; i <= 1; i++) {
-                    for (let j = -1; j <= 1; j++) {
-                        for (let k = -1; k <= 1; k++) {
-                            if (!(i === 0 && j === 0 && k === 0) || Math.abs(i) + Math.abs(j) + Math.abs(k) === 1) {
-                                addBlock(x + i, leavesHeight + j, z + k, 'leaves');
+            if (gridX < 0 || gridX >= gridCols || gridY < 0 || gridY >= gridRows) {
+                return false; // 在邊界外 (不能放置塔)
+            }
+
+            // 4. 檢查是否是初始鎖定且未解鎖的區域
+            const lockedTile = getLockedTile(gridX, gridY);
+            if (lockedTile && !unlockedTiles[`${gridX},${gridY}`]) {
+                return false; // 鎖定且未解鎖 (不能放置塔)
+            }
+
+            return true; // 預設的開放區域 或 已解鎖的區域 (可以放置塔)
+        }
+
+
+        // 遊戲主循環
+        function gameLoop(time) {
+            if (!isGameRunning) return;
+
+            const deltaTime = time - lastTime;
+            lastTime = time;
+
+            // 1. 更新遊戲狀態
+            updateGame(deltaTime);
+
+            // 2. 繪製
+            drawGame();
+
+            // 檢查遊戲是否結束
+            if (health <= 0 && !isGameOver) {
+                endGame(false);
+            }
+
+            if (!isGameOver) {
+                requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // 更新遊戲邏輯
+        function updateGame(deltaTime) {
+            
+            // 檢查遊戲勝利條件
+            if (!isWaveActive && enemies.length === 0) {
+                if (currentWave > LEVELS[currentLevelIndex].waves.length) {
+                    // 所有波次完成，遊戲勝利
+                    endGame(true);
+                    return;
+                }
+            }
+
+            // 敵人移動和攻擊終點
+            enemies = enemies.filter(enemy => {
+                const reachedEnd = enemy.move();
+                if (reachedEnd) {
+                    // 敵人到達終點，生命值已在 move() 中扣除
+                    return false; // 移除敵人
+                }
+                return true;
+            });
+
+
+            // 塔射擊
+            towers.forEach(tower => tower.shoot());
+
+            // 子彈移動和擊中
+            bullets = bullets.filter(bullet => !bullet.move());
+
+            // 敵人死亡檢查 (在子彈移動後處理)
+            enemies = enemies.filter(enemy => {
+                if (enemy.health <= 0) {
+                    money += enemy.reward;
+                    score += enemy.reward * 2; // 分數獎勵
+                    updateUI();
+                    return false; // 移除死亡敵人
+                }
+                return true;
+            });
+
+            // 波次生成邏輯
+            if (isWaveActive) {
+                spawnEnemies();
+
+                // 檢查波次是否結束 (所有敵人已生成且所有現存敵人已被擊敗)
+                const totalEnemiesInWave = LEVELS[currentLevelIndex].waves[currentWave - 1].flatMap(w => w).reduce((sum, item) => sum + item.count, 0);
+
+                if (currentWaveSpawnIndex >= totalEnemiesInWave && enemies.length === 0) {
+                    isWaveActive = false;
+                    currentWave++; // 進入下一波編號
+                    updateUI();
+                }
+            }
+        }
+
+        // 生成敵人
+        function spawnEnemies() {
+            const level = LEVELS[currentLevelIndex];
+            if (currentWave > level.waves.length) return;
+
+            const currentWaveConfig = level.waves[currentWave - 1];
+            
+            // 計算當前波次總共要生成的敵人數量
+            let totalEnemiesInWave = 0;
+            currentWaveConfig.forEach(config => totalEnemiesInWave += config.count);
+
+            // 如果已經生成了所有敵人，則退出
+            if (currentWaveSpawnIndex >= totalEnemiesInWave) return;
+            
+            
+            let totalEnemiesSpawnedSoFar = 0; // 追蹤所有配置中已排隊的敵人總數
+            let timeElapsedFrames = Math.floor((Date.now() - waveStartTime) / (1000 / 60)); // 經過的幀數
+            
+            // 遍歷所有配置項，檢查是否該生成新的敵人
+            for(const config of currentWaveConfig) {
+                for(let i = 0; i < config.count; i++) {
+                    const enemySpawnIndexInWave = totalEnemiesSpawnedSoFar;
+                    const spawnFrame = enemySpawnIndexInWave * config.interval;
+                    
+                    if (enemySpawnIndexInWave === currentWaveSpawnIndex) {
+                        // 這是我們正在等待生成的下一個敵人
+                        if (timeElapsedFrames >= spawnFrame) {
+                            enemies.push(new Enemy(config.type));
+                            currentWaveSpawnIndex++; // 成功生成，更新追蹤索引
+                            
+                            // 更新 debug 資訊 (可選)
+                            // debugPathLengthEl.textContent = `生成敵人: ${currentWaveSpawnIndex}/${totalEnemiesInWave} at frame ${timeElapsedFrames}`;
+
+                            return; // 一幀只生成一個敵人，然後退出
+                        }
+                    }
+                    totalEnemiesSpawnedSoFar++;
+                }
+            }
+        }
+
+
+        // 開始下一個波次
+        function startNextWave() {
+            if (currentWave > LEVELS[currentLevelIndex].waves.length) {
+                return; // 所有波次已完成
+            }
+
+            // 重置生成狀態
+            currentWaveSpawnIndex = 0;
+            waveStartTime = Date.now();
+            isWaveActive = true;
+            setSelectedTower(null); // 開始戰鬥時取消選中/建造模式
+            updateUI(); // 更新UI以顯示波次正在進行
+
+            console.log(`開始波次 ${currentWave}`);
+        }
+
+
+        // 繪製遊戲畫面
+        function drawGame() {
+            // 清空畫布
+            ctx.fillStyle = '#add8e6'; // 淺藍色背景
+            ctx.fillRect(0, 0, MAP_WIDTH, MAP_HEIGHT);
+
+            // 繪製鎖定區域 (在網格和路徑之前，以避免視覺衝突)
+            lockedTiles.forEach(tile => {
+                if (!unlockedTiles[`${tile.x},${tile.y}`]) {
+                    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)'; // 深灰色半透明
+                    ctx.fillRect(tile.x * TILE_SIZE, tile.y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    
+                    // 繪製鎖頭圖標和價格
+                    ctx.fillStyle = 'white';
+                    ctx.font = 'bold 15px Arial'; 
+                    ctx.textAlign = 'center';
+                    ctx.textBaseline = 'middle';
+                    ctx.fillText('鎖定', tile.x * TILE_SIZE + TILE_SIZE / 2, tile.y * TILE_SIZE + TILE_SIZE / 2 - 8);
+                    ctx.fillText(`￥${tile.cost}`, tile.x * TILE_SIZE + TILE_SIZE / 2, tile.y * TILE_SIZE + TILE_SIZE / 2 + 12);
+                }
+            });
+
+            // 繪製網格
+            ctx.strokeStyle = '#cccccc';
+            for (let x = 0; x <= MAP_WIDTH; x += TILE_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(x, 0);
+                ctx.lineTo(x, MAP_HEIGHT);
+                ctx.stroke();
+            }
+            for (let y = 0; y <= MAP_HEIGHT; y += TILE_SIZE) {
+                ctx.beginPath();
+                ctx.moveTo(0, y);
+                ctx.lineTo(MAP_WIDTH, y);
+                ctx.stroke();
+            }
+
+            // 繪製路徑
+            ctx.strokeStyle = '#b87333'; // 棕色
+            ctx.lineWidth = TILE_SIZE * 0.8;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            mapPath.forEach((p, index) => {
+                const x = p.x * TILE_SIZE + TILE_SIZE / 2;
+                const y = p.y * TILE_SIZE + TILE_SIZE / 2;
+                if (index === 0) {
+                    ctx.moveTo(x, y);
+                } else {
+                    ctx.lineTo(x, y);
+                }
+            });
+            ctx.stroke();
+            ctx.lineWidth = 1; // 重設線寬
+
+            // 繪製塔
+            towers.forEach(tower => tower.draw());
+
+            // 繪製敵人
+            enemies.forEach(enemy => enemy.draw());
+
+            // 繪製子彈
+            bullets.forEach(bullet => bullet.draw());
+
+            // 如果正在選擇塔，繪製預覽和放置範圍
+            if (selectedTowerType) {
+                const mousePos = getMousePos(canvas, lastMouseEvent);
+                if (mousePos) {
+                    const gridX = Math.floor(mousePos.x / TILE_SIZE);
+                    const gridY = Math.floor(mousePos.y / TILE_SIZE); 
+                    const isAvailable = isTileAvailable(gridX, gridY);
+
+                    // 繪製放置範圍 (網格)
+                    ctx.fillStyle = isAvailable ? 'rgba(0, 255, 0, 0.3)' : 'rgba(255, 0, 0, 0.3)';
+                    ctx.fillRect(gridX * TILE_SIZE, gridY * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+                    
+                    // 繪製塔的預覽
+                    const previewStats = TOWER_STATS[selectedTowerType.type][1];
+                    const centerX = gridX * TILE_SIZE + TILE_SIZE / 2;
+                    const centerY = gridY * TILE_SIZE + TILE_SIZE / 2;
+                    
+                    // 預覽射程
+                    ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+                    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
+                    ctx.beginPath();
+                    ctx.arc(centerX, centerY, previewStats.range, 0, Math.PI * 2);
+                    ctx.fill();
+                    ctx.stroke();
+
+                    // 預覽圖標
+                    ctx.fillStyle = previewStats.color;
+                    ctx.beginPath();
+                    ctx.rect(centerX - TILE_SIZE / 4, centerY - TILE_SIZE / 4, TILE_SIZE / 2, TILE_SIZE / 2);
+                    ctx.fill();
+                    ctx.strokeStyle = '#000';
+                    ctx.lineWidth = 2;
+                    ctx.stroke();
+                    ctx.lineWidth = 1;
+                }
+            }
+        }
+
+        // 結束遊戲
+        function endGame(isWin) {
+            isGameRunning = false;
+            isGameOver = true;
+            
+            if (isWin) {
+                gameOverTitleEl.textContent = '恭喜！您贏了！';
+                gameOverTitleEl.classList.remove('text-white');
+                gameOverTitleEl.classList.add('text-yellow-400');
+            } else {
+                gameOverTitleEl.textContent = '遊戲結束';
+                gameOverTitleEl.classList.remove('text-yellow-400');
+                gameOverTitleEl.classList.add('text-white');
+            }
+
+            finalScoreEl.textContent = score;
+            gameOverScreen.classList.remove('hidden');
+        }
+
+
+        // ----------------------------------------------------
+        // --- UI 更新與事件處理 ---
+        // ----------------------------------------------------
+
+        // 取消建造模式
+        function cancelBuildMode() {
+            selectedTowerType = null;
+            messageBox.classList.add('hidden');
+            updateUI(); 
+        }
+
+        // 更新 UI 狀態欄
+        function updateUI() {
+            moneyEl.innerHTML = `<i class="fas fa-coins mr-2"></i>金錢: ￥${money}`;
+            healthEl.innerHTML = `<i class="fas fa-heart mr-2"></i>生命: ${health}`;
+            
+            const maxWaves = LEVELS[currentLevelIndex].waves.length;
+
+            // --- 開始波次按鈕邏輯 ---
+            if (currentWave > maxWaves) {
+                // 所有波次完成，遊戲勝利 (在 updateGame 中處理)
+                waveEl.innerHTML = `<i class="fas fa-flag-checkered mr-2"></i>波次: ${maxWaves}/${maxWaves} (已完成!)`;
+                startWaveButton.classList.add('hidden');
+            } else {
+                startWaveButton.classList.remove('hidden');
+                nextWaveNumEl.textContent = currentWave;
+                
+                // 按鈕啟用條件：沒有敵人在場 AND 波次沒有在進行
+                const canStart = enemies.length === 0 && !isWaveActive;
+                startWaveButton.disabled = !canStart;
+                
+                // 更新波次顯示狀態
+                if (canStart) {
+                    waveEl.innerHTML = `<i class="fas fa-water mr-2"></i>波次: ${currentWave}/${maxWaves} (準備好了!)`;
+                    startWaveButton.innerHTML = `<i class="fas fa-play mr-2"></i>開始下一波 (波次 ${currentWave})`;
+                    
+                    // 只有在準備開始下一波且沒有在建造模式時才允許點擊商店按鈕
+                    document.getElementById('buyTower1').disabled = money < TOWER_STATS[1][1].cost && !selectedTowerType;
+                    document.getElementById('buyTower2').disabled = money < TOWER_STATS[2][1].cost && !selectedTowerType;
+                    document.getElementById('buyTower3').disabled = money < TOWER_STATS[3][1].cost && !selectedTowerType;
+
+                } else if (isWaveActive) {
+                    waveEl.innerHTML = `<i class="fas fa-water mr-2"></i>波次: ${currentWave}/${maxWaves} (戰鬥中!)`;
+                    startWaveButton.innerHTML = `<i class="fas fa-spinner fa-spin mr-2"></i>波次進行中...`;
+                    // 戰鬥中禁用建造
+                    document.getElementById('buyTower1').disabled = true;
+                    document.getElementById('buyTower2').disabled = true;
+                    document.getElementById('buyTower3').disabled = true;
+                }
+            }
+
+
+            scoreEl.innerHTML = `<i class="fas fa-star mr-2"></i>得分: ${score}`;
+            
+            // --- 取消建造按鈕的顯示/隱藏 ---
+            if (selectedTowerType) {
+                cancelBuildButton.classList.remove('hidden');
+            } else {
+                cancelBuildButton.classList.add('hidden');
+            }
+        }
+        
+        // 顯示塔的詳細數據和升級按鈕
+        function updateTowerStats(tower) {
+            selectedTowerStatsEl.innerHTML = `
+                <p><i class="fas fa-cog mr-2"></i><strong>名稱:</strong> ${tower.label}</p>
+                <p><i class="fas fa-star mr-2"></i><strong>等級:</strong> ${tower.level}</p>
+                <p><i class="fas fa-bullseye mr-2"></i><strong>射程:</strong> ${tower.range}</p>
+                <p><i class="fas fa-fist-raised mr-2"></i><strong>傷害:</strong> ${tower.damage}</p>
+                <p><i class="fas fa-tachometer-alt mr-2"></i><strong>射速:</strong> 每 ${tower.fireRate} 幀</p>
+                ${tower.slow > 0 ? `<p><i class="fas fa-hourglass-half mr-2"></i><strong>緩速:</strong> ${Math.floor(tower.slow * 100)}% (${Math.round(tower.slowDuration/60)}s)</p>` : ''}
+            `;
+
+            if (TOWER_STATS[tower.type][tower.level].upgrade) {
+                upgradeButton.classList.remove('hidden');
+                upgradeCostEl.textContent = tower.upgradeCost;
+                // 只有在非戰鬥階段和金錢足夠時才能升級
+                upgradeButton.disabled = money < tower.upgradeCost || isWaveActive;
+                
+                // 移除舊的事件監聽器，避免重複觸發
+                upgradeButton.onclick = null;
+                upgradeButton.onclick = () => tower.upgrade();
+            } else {
+                upgradeButton.classList.add('hidden');
+            }
+        }
+        
+        // 設置選中的塔 (用於繪製射程和顯示數據)
+        function setSelectedTower(tower) {
+            selectedTowerType = null; // 取消建造模式
+            selectedTower = tower;
+            if (tower) {
+                updateTowerStats(tower);
+            } else {
+                selectedTowerStatsEl.innerHTML = '<p>點擊地圖上的塔來查看統計數據和升級選項。</p>';
+                upgradeButton.classList.add('hidden');
+            }
+            updateUI(); // 確保 UI 狀態更新 (尤其是取消按鈕)
+        }
+
+
+        // 顯示訊息框
+        let messageTimeout;
+        function showMessageBox(message, styleClass) {
+            clearTimeout(messageTimeout);
+            
+            messageBox.classList.remove('hidden');
+            messageBox.className = 'message-box absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 p-4 rounded-lg shadow-2xl text-center z-50 transition-all duration-300 visible';
+            
+            messageText.textContent = message;
+            messageText.className = `text-lg font-semibold ${styleClass} p-3 rounded-lg`; // 應用樣式
+            
+            // 讓訊息框在 4 秒後自動消失
+            messageTimeout = setTimeout(() => {
+                messageBox.classList.remove('visible');
+                messageBox.classList.add('hidden');
+            }, 4000);
+        }
+
+        // 關閉訊息框的事件處理
+        document.getElementById('closeMessage').addEventListener('click', () => {
+            messageBox.classList.remove('visible');
+            messageBox.classList.add('hidden');
+            clearTimeout(messageTimeout);
+        });
+
+
+        // 重新開始遊戲按鈕
+        document.getElementById('restartButton').addEventListener('click', () => {
+            gameOverScreen.classList.add('hidden');
+            loadLevel(currentLevelIndex);
+        });
+
+
+        let lastMouseEvent = null;
+
+        // 獲取滑鼠在畫布上的座標
+        function getMousePos(canvas, event) {
+            if (!event) return null;
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+
+            let clientX, clientY;
+
+            if (event.touches && event.touches.length > 0) {
+                // 處理觸摸事件
+                clientX = event.touches[0].clientX;
+                clientY = event.touches[0].clientY;
+            } else {
+                // 處理滑鼠事件
+                clientX = event.clientX;
+                clientY = event.clientY;
+            }
+
+            return {
+                x: (clientX - rect.left) * scaleX,
+                y: (clientY - rect.top) * scaleY
+            };
+        }
+        
+        // 滑鼠移動事件，用於繪製塔的預覽
+        canvas.addEventListener('mousemove', (e) => {
+            lastMouseEvent = e;
+            if (selectedTowerType) {
+                // 觸發繪製更新 (在 gameLoop 中處理)
+            }
+        });
+
+        // 觸摸移動事件
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault(); // 防止滾動
+            lastMouseEvent = e;
+            if (selectedTowerType) {
+                // 觸發繪製更新 (在 gameLoop 中處理)
+            }
+        }, { passive: false });
+
+
+        // 畫布點擊事件
+        canvas.addEventListener('click', (e) => {
+            if (isGameOver || !isGameRunning) return;
+
+            const pos = getMousePos(canvas, e);
+            const gridX = Math.floor(pos.x / TILE_SIZE);
+            const gridY = Math.floor(pos.y / TILE_SIZE);
+
+            if (selectedTowerType) {
+                // --- 嘗試放置塔 (建造模式) ---
+                if (isTileAvailable(gridX, gridY)) {
+                    if (money >= selectedTowerType.cost) {
+                        money -= selectedTowerType.cost;
+                        towers.push(new Tower(selectedTowerType.type, gridX, gridY));
+                        updateUI();
+                        showMessageBox(`成功放置 ${TOWER_STATS[selectedTowerType.type][1].label.replace(/ I$/, '')}！`, 'bg-green-50 text-green-800');
+                        // 保持選中狀態以便連續放置
+                    } else {
+                        showMessageBox('金錢不足！', 'bg-red-50 text-red-800');
+                        cancelBuildMode(); // 取消建造模式
+                    }
+                } else {
+                    // 根據網格狀態給予不同提示
+                    if (pathTiles.has(`${gridX},${gridY}`)) {
+                        showMessageBox('不能在路徑上建造！', 'bg-red-50 text-red-800');
+                    } else if (getLockedTile(gridX, gridY)) {
+                        showMessageBox('該區域尚未解鎖！', 'bg-red-50 text-red-800');
+                    } else if (towers.find(t => t.gridX === gridX && t.gridY === gridY)) {
+                        showMessageBox('該位置已被佔用！', 'bg-red-50 text-red-800');
+                    } else {
+                         showMessageBox('無效的建造位置！', 'bg-red-50 text-red-800');
+                    }
+                }
+            } else {
+                // --- 嘗試選中塔 或 解鎖區域 ---
+                const clickedTower = towers.find(t => 
+                    t.gridX === gridX && t.gridY === gridY
+                );
+                
+                if (clickedTower) {
+                    // 1. 選中塔
+                    setSelectedTower(clickedTower);
+                } else {
+                    // 2. 嘗試解鎖區域
+                    const lockedTile = getLockedTile(gridX, gridY);
+                    const tileKey = `${gridX},${gridY}`;
+                    
+                    if (lockedTile && !unlockedTiles[tileKey]) {
+                        if (money >= lockedTile.cost) {
+                            money -= lockedTile.cost;
+                            unlockedTiles[tileKey] = true;
+                            updateUI();
+                            // 點擊解鎖區域後，立即取消選中/建造模式
+                            setSelectedTower(null);
+                            showMessageBox(`成功解鎖區域 (￥${lockedTile.cost})！現在可以在此建造砲塔了。`, 'bg-green-50 text-green-800');
+                        } else {
+                            showMessageBox(`金錢不足！解鎖此區域需要 ￥${lockedTile.cost}。`, 'bg-red-50 text-red-800');
+                        }
+                    } else {
+                         // 3. 取消選中 (如果點擊了空地，且不是鎖定區域)
+                        setSelectedTower(null);
+                    }
+                }
+            }
+        });
+        
+        // 觸摸結束事件 (用於觸發放置/選中)
+        canvas.addEventListener('touchend', (e) => {
+            if (isGameOver || !isGameRunning) return;
+
+            // 使用最後的觸摸位置進行模擬點擊
+            if (lastMouseEvent && (e.changedTouches || e.touches)) {
+                // 模擬點擊邏輯 (與 click 處理器相同)
+                const pos = getMousePos(canvas, lastMouseEvent);
+                const gridX = Math.floor(pos.x / TILE_SIZE);
+                const gridY = Math.floor(pos.y / TILE_SIZE);
+
+                if (selectedTowerType) {
+                    // --- 嘗試放置塔 ---
+                    if (isTileAvailable(gridX, gridY)) {
+                        if (money >= selectedTowerType.cost) {
+                            money -= selectedTowerType.cost;
+                            towers.push(new Tower(selectedTowerType.type, gridX, gridY));
+                            updateUI();
+                            showMessageBox(`成功放置 ${TOWER_STATS[selectedTowerType.type][1].label.replace(/ I$/, '')}！`, 'bg-green-50 text-green-800');
+                            // 保持選中狀態以便連續放置
+                        } else {
+                            showMessageBox('金錢不足！', 'bg-red-50 text-red-800');
+                            cancelBuildMode(); // 取消建造模式
+                        }
+                    } else {
+                        // 根據網格狀態給予不同提示
+                        if (pathTiles.has(`${gridX},${gridY}`)) {
+                            showMessageBox('不能在路徑上建造！', 'bg-red-50 text-red-800');
+                        } else if (getLockedTile(gridX, gridY)) {
+                            showMessageBox('該區域尚未解鎖！', 'bg-red-50 text-red-800');
+                        } else if (towers.find(t => t.gridX === gridX && t.gridY === gridY)) {
+                            showMessageBox('該位置已被佔用！', 'bg-red-50 text-red-800');
+                        } else {
+                            showMessageBox('無效的建造位置！', 'bg-red-50 text-red-800');
+                        }
+                    }
+                } else {
+                    // --- 嘗試選中塔 或 解鎖區域 ---
+                    const clickedTower = towers.find(t => 
+                        t.gridX === gridX && t.gridY === gridY
+                    );
+                    
+                    if (clickedTower) {
+                        // 1. 選中塔
+                        setSelectedTower(clickedTower);
+                    } else {
+                        // 2. 嘗試解鎖區域
+                        const lockedTile = getLockedTile(gridX, gridY);
+                        const tileKey = `${gridX},${gridY}`;
+                        
+                        if (lockedTile && !unlockedTiles[tileKey]) {
+                            if (money >= lockedTile.cost) {
+                                money -= lockedTile.cost;
+                                unlockedTiles[tileKey] = true;
+                                updateUI();
+                                // 點擊解鎖區域後，立即取消選中/建造模式
+                                setSelectedTower(null); 
+                                showMessageBox(`成功解鎖區域 (￥${lockedTile.cost})！現在可以在此建造砲塔了。`, 'bg-green-50 text-green-800');
+                            } else {
+                                showMessageBox(`金錢不足！解鎖此區域需要 ￥${lockedTile.cost}。`, 'bg-red-50 text-red-800');
                             }
+                        } else {
+                             // 3. 取消選中 (如果點擊了空地，且不是鎖定區域)
+                            setSelectedTower(null);
                         }
                     }
                 }
             }
+            lastMouseEvent = null; // 清除觸摸位置
+        });
 
-            function createPigs() {
-                const numPigs = 5;
-                for (let i = 0; i < numPigs; i++) {
-                    const x = (Math.random() - 0.5) * 20;
-                    const z = (Math.random() - 0.5) * 20;
-                    createPig(x, 1, z);
-                }
-            }
 
-            function createPig(x, y, z) {
-                const pigGroup = new THREE.Group();
-                const pigColor = blockColors['pig'];
+        // 商店按鈕事件處理
+        const handleShopClick = (towerType) => {
+            const cost = TOWER_STATS[towerType][1].cost; 
 
-                const bodyGeometry = new THREE.BoxGeometry(1.2, 0.8, 2);
-                const bodyMaterial = new THREE.MeshPhongMaterial({ color: pigColor });
-                const bodyMesh = new THREE.Mesh(bodyGeometry, bodyMaterial);
-                pigGroup.add(bodyMesh);
-
-                const headGeometry = new THREE.BoxGeometry(0.8, 0.8, 0.8);
-                const headMaterial = new THREE.MeshPhongMaterial({ color: pigColor });
-                const headMesh = new THREE.Mesh(headGeometry, headMaterial);
-                headMesh.position.z = 1.4;
-                pigGroup.add(headMesh);
-                
-                pigGroup.position.set(x, y, z);
-                scene.add(pigGroup);
-                
-                pigGroup.userData = { type: 'pig' };
-
-                const pigShape = new CANNON.Box(new CANNON.Vec3(0.6, 0.4, 1));
-                const pigBody = new CANNON.Body({ mass: 1, position: new CANNON.Vec3(x, y, z), shape: pigShape });
-                pigBody.userData = { type: 'pig', health: 20, lastWanderTime: 0 };
-                pigBody.linearDamping = 0.9;
-                world.addBody(pigBody);
-
-                pigMeshes.push(pigGroup);
-                pigBodies.push(pigBody);
-            }
-
-            function createPlayer() {
-                player = new THREE.Object3D();
-                scene.add(player);
-                player.position.set(0, 5, 0);
-
-                const playerShape = new CANNON.Cylinder(0.5, 0.5, 1.8, 16); 
-                playerBody = new CANNON.Body({ mass: 1, position: new CANNON.Vec3(0, 5, 0), shape: playerShape });
-                playerBody.fixedRotation = true;
-                playerBody.linearDamping = 0.95; 
-                world.addBody(playerBody);
-
-                player.add(camera);
-                camera.position.set(0, 0.9, 0); 
-            }
-
-            function addBlock(x, y, z, type) {
-                const blockGeometry = new THREE.BoxGeometry(BLOCK_DIMENSIONS, BLOCK_DIMENSIONS, BLOCK_DIMENSIONS);
-                const blockMaterial = new THREE.MeshPhongMaterial({ color: blockColors[type] });
-                const mesh = new THREE.Mesh(blockGeometry, blockMaterial);
-                scene.add(mesh);
-                mesh.position.set(x, y, z);
-                
-                const blockId = `${x}-${y}-${z}`;
-                mesh.userData = { type: type, blockId: blockId, isBlock: true };
-
-                const blockShape = new CANNON.Box(new CANNON.Vec3(BLOCK_DIMENSIONS/2, BLOCK_DIMENSIONS/2, BLOCK_DIMENSIONS/2));
-                const blockBody = new CANNON.Body({ mass: 0, position: new CANNON.Vec3(x, y, z), shape: blockShape });
-                blockBody.userData = { blockId: blockId, isBlock: true };
-                world.addBody(blockBody);
-                
-                blockMeshes.set(blockId, mesh);
-                blockBodies.set(blockId, blockBody);
-
-                if (type === 'sapling') {
-                    saplingGrowthTracker.set(blockId, performance.now());
-                }
-            }
-
-            function removeBlock(blockId) {
-                const blockMesh = blockMeshes.get(blockId);
-                const blockBody = blockBodies.get(blockId);
-
-                if (blockMesh) {
-                    scene.remove(blockMesh);
-                    blockMeshes.delete(blockId);
-                }
-
-                if (blockBody) {
-                    world.removeBody(blockBody);
-                    blockBodies.delete(blockId);
-                }
-
-                if (saplingGrowthTracker.has(blockId)) {
-                    saplingGrowthTracker.delete(blockId);
-                }
-            }
-
-            function removeDiggingEffect() {
-                if (diggingEffect) {
-                    scene.remove(diggingEffect);
-                    diggingEffect = null;
-                }
-            }
-
-            function removePig(pigIndex) {
-                if (pigIndex < 0 || pigIndex >= pigMeshes.length) return;
-                
-                // 掉落豬肉 (ID 11)
-                addItemToInventory(11, 1);
-
-                scene.remove(pigMeshes[pigIndex]);
-                world.removeBody(pigBodies[pigIndex]);
-                pigMeshes.splice(pigIndex, 1);
-                pigBodies.splice(pigIndex, 1);
-                
-                showMessage("你擊敗了一頭豬，獲得了一塊豬肉！");
-            }
-
-            function getRootObject(object) {
-                return object.parent && object.parent.isGroup ? object.parent : object;
-            }
-
-            window.onload = function() {
-                init();
-            };
-
-            document.addEventListener('contextmenu', (e) => e.preventDefault());
-
-            function onWindowResize() {
-                camera.aspect = window.innerWidth / window.innerHeight;
-                camera.updateProjectionMatrix();
-                renderer.setSize(window.innerWidth, window.innerHeight);
+            if (isWaveActive) {
+                showMessageBox("波次進行中，無法建造！", 'bg-red-50 text-red-800');
+                return;
             }
             
-            function pointerLockChange() {
-                if (document.pointerLockElement === document.body) {
-                    if (!isInventoryOpen) {
-                         showMessage("點擊滑鼠左鍵挖掘/攻擊，右鍵建造/進食。按空白鍵跳躍。");
-                    }
-                } else {
-                    if (!isInventoryOpen) {
-                        showMessage("點擊畫面以控制人物。按 C 鍵打開背包。遊戲時間為 1:60 加速。");
-                    }
-                }
-            }
-            
-            function gameOver() {
-                isGameOver = true;
-                document.exitPointerLock();
-                
-                showMessage("遊戲結束！你的生命值為零。請重新整理頁面以重新開始。");
+            setSelectedTower(null); // 取消選中塔的狀態
+
+            if (money < cost) {
+                showMessageBox("金錢不足！", 'bg-red-50 text-red-800');
+                selectedTowerType = null;
+                return;
             }
 
-            function checkSaplingGrowth(currentTime) {
-                const saplingsToGrow = [];
-                const growthDuration = 30000; 
-
-                for (const [blockId, placementTime] of saplingGrowthTracker.entries()) {
-                    if (currentTime - placementTime >= growthDuration) {
-                        saplingsToGrow.push(blockId);
-                    }
-                }
-
-                for (const blockId of saplingsToGrow) {
-                    const mesh = blockMeshes.get(blockId);
-                    if (mesh) {
-                        const { x, y, z } = mesh.position;
-                        removeBlock(blockId); 
-                        createTree(Math.round(x), Math.round(y), Math.round(z)); 
-                        showMessage(`一顆樹苗在 (${Math.round(x)}, ${Math.round(y)}, ${Math.round(z)}) 處長成了一棵樹!`);
-                    }
-                    saplingGrowthTracker.delete(blockId);
-                }
+            if (selectedTowerType && selectedTowerType.type === towerType) {
+                // 如果點擊了當前選中的類型，則取消選中
+                selectedTowerType = null;
+                messageBox.classList.add('hidden');
+            } else {
+                // 選中新的塔類型
+                selectedTowerType = { type: towerType, cost: cost };
+                showMessageBox(`準備放置 ${TOWER_STATS[towerType][1].label.replace(/ I$/, '')} (￥${cost})。點擊地圖。`, 'bg-yellow-50 text-yellow-800');
             }
-            
-            function updatePigs(time) {
-                for (let i = 0; i < pigMeshes.length; i++) {
-                    const pigBody = pigBodies[i];
-                    const pigPosition = pigBody.position;
-                    
-                    pigMeshes[i].position.copy(pigPosition);
-                    pigMeshes[i].quaternion.copy(pigBody.quaternion);
+            updateUI(); // 更新 UI 狀態以顯示取消按鈕
+        };
 
-                    if (time - pigBody.userData.lastWanderTime > 5000) {
-                        const randomDirection = new CANNON.Vec3((Math.random() - 0.5) * 5, 0, (Math.random() - 0.5) * 5);
-                        randomDirection.normalize();
-                        randomDirection.scale(1, randomDirection);
-                        pigBody.velocity.set(randomDirection.x, pigBody.velocity.y, randomDirection.z);
-                        pigBody.userData.lastWanderTime = time;
-                    }
-                }
-            }
-            
-            function cullDistantObjects() {
-                const playerPosition = player.position;
-                
-                const blockKeys = Array.from(blockMeshes.keys());
-                for (const blockId of blockKeys) {
-                    const mesh = blockMeshes.get(blockId);
-                    if (mesh && playerPosition.distanceTo(mesh.position) > cullingDistance) {
-                        removeBlock(blockId);
-                    }
-                }
+        document.getElementById('buyTower1').addEventListener('click', (e) => handleShopClick(1));
+        document.getElementById('buyTower2').addEventListener('click', (e) => handleShopClick(2));
+        document.getElementById('buyTower3').addEventListener('click', (e) => handleShopClick(3));
 
-                for (let i = pigMeshes.length - 1; i >= 0; i--) {
-                    const pigMesh = pigMeshes[i];
-                    if (playerPosition.distanceTo(pigMesh.position) > cullingDistance) {
-                        removePig(i);
-                    }
-                }
+        // 開始波次按鈕事件處理
+        startWaveButton.addEventListener('click', () => {
+            if (enemies.length === 0 && !isWaveActive) {
+                startNextWave();
             }
-            
-        })();
+        });
+
+        // 新增：取消建造按鈕事件處理
+        cancelBuildButton.addEventListener('click', cancelBuildMode);
+
+        // --- 遊戲初始化 ---
+        window.onload = function() {
+            // 更新商店按鈕的價格顯示
+            document.getElementById('buyTower1').querySelector('.text-sm').textContent = `￥${TOWER_STATS[1][1].cost}`;
+            document.getElementById('buyTower2').querySelector('.text-sm').textContent = `￥${TOWER_STATS[2][1].cost}`;
+            document.getElementById('buyTower3').querySelector('.text-sm').textContent = `￥${TOWER_STATS[3][1].cost}`;
+
+            loadLevel(1);
+        }
+
     </script>
+
 </body>
 </html>
